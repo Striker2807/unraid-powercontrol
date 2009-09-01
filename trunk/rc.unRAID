@@ -1,0 +1,140 @@
+#!/bin/bash
+# Start/stop/restart unRAID.
+
+if [ ${DEBUG:=0} -gt 0 ]
+   then set -x -v 
+fi
+
+alias logger="/usr/bin/logger -is -plocal7.info -trc.unRAID"
+
+# Set Your LOG directory here
+LOGDIR=/boot/logs
+
+# Set amount of syslogs you want to keep.
+LOGSAVE="10"	# Number of syslogs to save in logdir
+
+# If the LOG directory does not exist, make it!
+[ ! -d ${LOGDIR} ] && mkdir -p ${LOGDIR}
+
+
+diagnostic_dump()
+{
+    ls -1 /dev/sd[a-z] /dev/hd[a-z]  | while read DEVICE
+    do smartctl -d ata -a ${DEVICE}
+    done 2>&1 | sed 's/\t/        /g' | /usr/bin/logger -plocal7.info -tsmartctl
+
+    lsmod         | /usr/bin/logger -plocal7.info -tlsmod
+    ifconfig eth0 | /usr/bin/logger -plocal7.info -tifconfig
+    ethtool  eth0 | sed 's/\t/        /g' | /usr/bin/logger -plocal7.info -tethtool
+
+    echo status > /proc/mdcmd
+    /usr/bin/logger -plocal7.info -tmdcmd < /proc/mdcmd
+
+}
+
+save_syslog()
+{
+    TS="%Y%m%d-%H%M%S"
+    LOGDATE=`ls -l --time-style="+${TS}" /var/log/syslog | cut -d' ' -f6`
+    LOGNAME="${LOGDIR}/syslog-${LOGDATE}.txt"
+    # logger "Saving current syslog to ${LOGNAME}"
+    todos < /var/log/syslog > "${LOGNAME}"
+    touch --reference=/var/log/syslog ${LOGNAME}
+    chmod a-x ${LOGNAME} 
+
+    # Save only the $LOGSAVE number of current files
+    i=0
+    ls -1tr ${LOGDIR}/syslog*.txt | while read SYSLOG
+    do  ((i++))
+        [ $i -gt ${LOGSAVE} ] && rm -f ${SYSLOG}
+    done
+
+    # Always save latest syslog in a .zip archive for uploading
+    # logger "zipping current syslog to ${LOGDIR}/syslog.zip"
+    # only zip a new syslog.txt if syslog newer then current .zip
+    if [ /var/log/syslog -nt ${LOGDIR}/syslog.zip ]
+       then cd /var/log
+            # make a symlink to syslog.txt for windows viewing
+            ln -s  syslog syslog.txt
+            rm -f  ${LOGDIR}/syslog.zip
+            # -o (set .zip time to mtime of syslog)
+            # -l (convert lf to crlf on the fly!)   
+            zip -o -l ${LOGDIR}/syslog.zip syslog.txt
+            rm -f  syslog.txt  # remove synlink
+            chmod a-x ${LOGDIR}/syslog.zip # remove samba attributes
+    fi
+
+}
+
+# Start unraid:
+unRAID_start() 
+{
+    echo "Starting unRAID."
+
+    SD_RCFILE=/etc/rc.d/rc.local_shutdown
+    RCFILE=/etc/rc.d/rc.unRAID
+
+    if ! grep ${RCFILE} ${SD_RCFILE} >/dev/null 2>&1
+       then echo -e "\n\n[ -x ${RCFILE} ] && ${RCFILE} stop\n" >> ${SD_RCFILE}
+    fi
+
+    [ ! -x ${SD_RCFILE} ] && chmod u+x ${SD_RCFILE}
+
+}
+
+# Stop unraid:
+unRAID_stop() 
+{
+    logger "Stopping unRAID."
+
+    [ -x /etc/rc.d/rc.samba ] && /etc/rc.d/rc.samba stop
+    [ -x /etc/rc.d/rc.nfsd  ] && /etc/rc.d/rc.nfsd  stop
+
+    logger "Killing active pids on the array drives"
+    for fs in /mnt/user /mnt/disk*
+    do  [ ! -d ${fs} ] && continue
+        for signal in TERM TERM KILL
+        do  for pid in $(fuser -cu $fs 2>/dev/null)
+            do  ps --no-headers -fp ${pid}
+                if kill -0 ${pid} 2>/dev/null
+                   then kill -${signal} ${pid}
+                fi
+            done
+            [ ! -z "${pid}" ] && sleep 1
+        done
+    done # 2>&1 | logger
+
+   
+    logger "Umounting the drives"
+    for disk in /mnt/disk*
+    do  /bin/umount -v ${disk}
+    done # 2>&1 | logger
+  
+    sync
+
+    logger "Stopping the Array"
+    echo stop > /proc/mdcmd
+    sleep 1
+    echo status > /proc/mdcmd
+    logger      < /proc/mdcmd
+
+    # killall emhttp
+
+}
+
+# Restart unRAID:
+unRAID_restart() 
+{
+    unRAID_stop
+    sleep 1
+    unRAID_start
+}
+
+case "$1" in
+    'start'  ) unRAID_start   ;;
+    'stop'   ) unRAID_stop    ;;
+    'restart') unRAID_restart ;;
+    'install') unRAID_install ;;
+    'syslog' ) diagnostic_dump; save_syslog ;;
+    *) echo "usage $0 start|stop|restart|syslog";;
+esac
