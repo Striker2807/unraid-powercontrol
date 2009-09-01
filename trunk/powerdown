@@ -1,0 +1,61 @@
+#!/bin/bash
+
+if [ -d /boot/logs ]
+   then LOGDIR="/boot/logs"
+   else if [ -d /boot/custom/var/log ]
+           then LOGDIR="/boot/custom/var/log"
+           else mkdir /boot/logs
+                LOGDIR="/boot/logs"
+        fi
+fi
+
+alias logger="/usr/bin/logger -is -plocal7.info -tpowerdown" 
+
+logger "Powerdown initiated"
+
+if [ -f /var/run/powerdown.pid ]
+   then logger "Powerdown already active, this one is exiting"
+	exit
+   else echo $$ > /var/run/powerdown.pid
+fi
+
+trap "rm -f /var/run/powerdown.pid" EXIT HUP INT QUIT
+
+logger "Shutting down Samba"
+/etc/rc.d/rc.samba stop
+
+logger "Syncing the drives"
+/bin/sync
+
+logger "Killing active pids on the array drives"
+for fs in /mnt/user /mnt/disk*
+do 
+    if [ ! -d ${fs} ] ; then continue ; fi
+    for pid in $(fuser -cu $fs 2>/dev/null)
+    do  ps --no-headers -fp ${pid}
+        kill -TERM ${pid}
+	# sleep 1
+	#if kill -0 ${pid} 2>/dev/null
+	#   then kill -9 ${pid}
+	#fi
+    done
+done 2>&1 | logger 
+
+logger "Umounting the drives"
+for disk in /mnt/disk*
+do  /bin/umount ${disk}
+done
+
+logger "Stopping the Array"
+echo stop > /proc/mdcmd
+sleep 1
+logger    < /proc/mdcmd
+sleep 1
+
+logger "Saving current syslog to ${LOGDIR}/syslog.txt"
+todos < /var/log/syslog > ${LOGDIR}/syslog.txt
+chmod a-x ${LOGDIR}/syslog.txt
+
+# /sbin/poweroff
+logger "Initiating Shutdown with Halt"
+/sbin/shutdown -t5 -h now
