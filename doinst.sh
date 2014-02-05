@@ -12,9 +12,7 @@ config() {
   # Otherwise, we leave the .new copy for the admin to consider...
 }
 
-if [ ${DEBUG:=0} -gt 0 ]
-   then set -x -v 
-fi
+[ ${DEBUG:=0} -gt 0 ] && set -x -v 
 
 #for i in config.new 
 #do # config etc/$i; 
@@ -63,26 +61,25 @@ if [ ! -z "${LOGSAVE}" ];then
    sed --in-place=.bak -e "s/LOGSAVE=.*/LOGSAVE=${LOGSAVE}/g" ${RCFILE}
 fi
 
+if [ ! -z "${RCDIR}" ];then
+   sed --in-place=.bak -e "s/RCDIR=.*/RCDIR=${RCCDIR}/g" ${RCFILE}
+fi
+
 if [ ! -z "${LOGROTATE}" ];then 
    if ! grep ${RCFILE} /etc/logrotate.conf > /dev/null 2>&1
-      then IFS="
+    then IFS="
 "
-           echo "Fixing broken /etc/logrotate.conf"
-           sed --in-place=.bak -e 's/10K/10k/g' /etc/logrotate.conf
-           BLINE='/bin/kill -HUP cat /var/run/syslogd.pid.*'
-           GLINE='/bin/kill -HUP `cat /var/run/syslogd.pid 2>/dev/null` 2>/dev/null || true'
-           sed --in-place=.bak -e "s#${BLINE}#${GLINE}#g" /etc/logrotate.conf
-           while read LINE
-           do echo "${LINE}"
-              if [ "${LINE}" = "/var/log/syslog {" ]
-                 then echo "    prerotate"
-                      echo "       ${RCFILE} syslog"
-                      echo "    endscript"
-                      echo "    compress"
-              fi
-            done < /etc/logrotate.conf    > /etc/logrotate.conf.tmp
-            cat < /etc/logrotate.conf.tmp > /etc/logrotate.conf
-            rm -f /etc/logrotate.conf.tmp
+	   while read LINE
+	   do echo "${LINE}"
+		  if [ "${LINE}" = "/var/log/syslog {" ]
+			 then echo "    prerotate"
+				  echo "       ${RCFILE} syslog"
+				  echo "    endscript"
+				  echo "    compress"
+		  fi
+		done < /etc/logrotate.conf    > /etc/logrotate.conf.tmp
+		cat < /etc/logrotate.conf.tmp > /etc/logrotate.conf
+		rm -f /etc/logrotate.conf.tmp
    fi
 fi
 
