@@ -2,7 +2,7 @@
 # Start/stop/restart unRAID.
 
 if [ ${DEBUG:=0} -gt 0 ]
-   then set -x -v 
+   then set -x -v
 fi
 
 P=${0##*/}              # basename of program
@@ -13,7 +13,7 @@ LOGDIR=/boot/logs
 
 # Set amount of syslogs you want to keep.
 # Number of syslogs to save in logdir
-LOGSAVE="10"	
+LOGSAVE="10"
 
 # If the LOG directory does not exist, make it!
 [ ! -d ${LOGDIR} ] && mkdir -p ${LOGDIR}
@@ -21,7 +21,7 @@ LOGSAVE="10"
 PATH=$PATH:/sbin:/usr/sbin:/boot/custom/bin
 
 # Alter this to NO or anything other then YES
-# To disable calls to these diagnostics 
+# To disable calls to these diagnostics
 SMARTCTL=${SMARTCTL:=YES}
 HDPARM=${HDPARM:=YES}
 
@@ -49,23 +49,23 @@ diagnostic_dump()
 {
     echo "Capturing information to syslog. Please wait..."
 
-    logger -tversion -s < /proc/version    
-    logger -tcmdline    < /proc/cmdline    
-    logger -tmeminfo    < /proc/meminfo    
-    logger -tdevices    < /proc/devices    
-    logger -tinterrupts < /proc/interrupts 
-    logger -tioports    < /proc/ioports    
-    logger -tdma        < /proc/dma        
+    logger -tversion -s < /proc/version
+    logger -tcmdline    < /proc/cmdline
+    logger -tmeminfo    < /proc/meminfo
+    logger -tdevices    < /proc/devices
+    logger -tinterrupts < /proc/interrupts
+    logger -tioports    < /proc/ioports
+    logger -tdma        < /proc/dma
     logger -tmounts     < /proc/mounts
-    logger -tdiskstats  < /proc/diskstats  
+    logger -tdiskstats  < /proc/diskstats
 
-    if [ "${HDPARM}" = "YES" ] ; then 
+    if [ "${HDPARM}" = "YES" ] ; then
        ls -1 /dev/sd[a-z] /dev/hd[a-z]  | while read DEVICE
        do hdparm -I -i ${DEVICE}
        done 2>&1 | logger -thdparm
     fi
 
-    if [ "${SMARTCTL}" = "YES" ] ; then 
+    if [ "${SMARTCTL}" = "YES" ] ; then
        ls -1 /dev/sd[a-z] /dev/hd[a-z]  | while read DEVICE
        do smartctl -n standby -d ata -a ${DEVICE}
        done 2>&1 | sed 's/\t/        /g' | logger -tsmartctl
@@ -75,8 +75,8 @@ diagnostic_dump()
     lsmod          2>&1 | logger -tlsmod
     ifconfig eth0  2>&1 | logger -tifconfig
 
-    ( ethtool eth0 ; ethtool -S eth0 ) | 
-	sed 's/\t/        /g' 2>&1 | logger -tethtool
+    ( ethtool eth0 ; ethtool -S eth0 ) |
+      sed 's/\t/        /g' 2>&1 | logger -tethtool
 
     BC=/boot/config
     for FILE in ${BC}/*.cfg ${BC}/shares/*
@@ -86,7 +86,7 @@ diagnostic_dump()
 
     if [ -e /proc/mdcmd ]
        then echo status > /proc/mdcmd
-    	    sleep 1
+            sleep 1
             logger -tmdcmd < /proc/mdcmd
     fi
 
@@ -104,7 +104,7 @@ save_syslog()
     i=0
     ls -1t ${LOGDIR}/syslog*.txt | while read SYSLOG
     do  ((i++))
-        if [ $i -gt ${LOGSAVE} ] 
+        if [ $i -gt ${LOGSAVE} ]
            then echo "Removing old syslog: ${SYSLOG}"
                 rm -f ${SYSLOG}
         fi
@@ -114,7 +114,7 @@ save_syslog()
     echo "Saving current syslog: ${LOGNAME}"
     todos < /var/log/syslog > "${LOGNAME}"
     touch --reference=/var/log/syslog ${LOGNAME}
-    chmod a-x ${LOGNAME} 
+    chmod a-x ${LOGNAME}
     ls -l "${LOGNAME}"
 
     # Save latest syslog in a .zip archive for uploading
@@ -123,7 +123,7 @@ save_syslog()
 
     if [ ! -x /usr/bin/zip ]
        then echo "zip not installed. Consider installing to automatically zip current syslog"
-            return 
+            return
     fi
 
     if [ /var/log/syslog -nt ${LOGDIR}/syslog.zip ]
@@ -132,7 +132,7 @@ save_syslog()
             ln -s  syslog syslog.txt
             rm -f  ${LOGDIR}/syslog.zip
             # -o (set .zip time to mtime of syslog)
-            # -l (convert lf to crlf on the fly!)   
+            # -l (convert lf to crlf on the fly!)
             zip -o -l ${LOGDIR}/syslog.zip syslog.txt
             rm -f  syslog.txt  # remove symlink
             chmod a-x ${LOGDIR}/syslog.zip # remove samba attributes
@@ -140,7 +140,7 @@ save_syslog()
 }
 
 # Start unraid:
-unRAID_start() 
+unRAID_start()
 {
     logger "Starting unRAID."
 
@@ -156,8 +156,13 @@ unRAID_start()
 }
 
 # Stop unraid:
-unRAID_stop() 
+unRAID_stop()
 {
+    # lines added by SlrG
+    logger "Stopping Plugins."
+    comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -- "/etc/rc.d") | while read line ; do echo Sending \"$line stop\"; $line stop ; done
+    # end of lines added by SlrG
+
     logger "Stopping unRAID."
 
     diagnostic_dump
@@ -180,15 +185,15 @@ unRAID_stop()
         done
     done 2>&1 | logger
 
-   
+
     logger "Umounting the drives"
     for disk in /mnt/disk*
     do  /bin/umount -v ${disk}
     done 2>&1 | logger
-  
+
     sync
 
-    if [ -e /proc/mdcmd ] 
+    if [ -e /proc/mdcmd ]
        then logger "Stopping the Array"
             echo status > /proc/mdcmd
             cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.1
@@ -200,14 +205,14 @@ unRAID_stop()
             rm   -f /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2
     fi
 
-    save_syslog 
+    save_syslog
 
     # killall emhttp
 
 }
 
 # Restart unRAID:
-unRAID_restart() 
+unRAID_restart()
 {
     unRAID_stop
     sleep 1
@@ -218,15 +223,15 @@ unRAID_restart()
 
 load_mdstatus()
 {
-    [ ${DEBUG:=0} -gt 2 ] && set -x -v 
-    OFS="${IFS}"  # Save IFS 
+    [ ${DEBUG:=0} -gt 2 ] && set -x -v
+    OFS="${IFS}"  # Save IFS
 
     MDCMDTMP="/tmp/mdcmd.$$"
     # create tmp output, set trap for rm on exit
     touch ${MDCMDTMP}
     trap "rm -f ${MDCMDTMP}" EXIT HUP INT QUIT TERM
 
-    # save status command 
+    # save status command
     # if $1 is defined, use that, otherwise use /proc/mdcmd
     # this is for testing using a saved or static output of mdcmd
     if [ ! -z "${1}" ]
@@ -234,7 +239,7 @@ load_mdstatus()
        else MDCMD="/proc/mdcmd"
             [ -e ${MDCMD} ] && echo status > ${MDCMD}
     fi
-    if [ -e ${MDCMD} ] 
+    if [ -e ${MDCMD} ]
        then cat < ${MDCMD} > ${MDCMDTMP}
        else echo "mdcmd; ${MDCMD} does not exist" >&2
     fi
@@ -247,7 +252,7 @@ load_mdstatus()
     MDI=0  # Set starting point for indexed variables
     while read LINE
     do  [ -z "${LINE}" ] && continue
-	VAR="${LINE%=*}"   # Separate var from var=value
+        VAR="${LINE%=*}"   # Separate var from var=value
         VALUE="${LINE#*=}" # separate value from var=value
         VARI="${VAR%\.*}"  # separate .#  from var
         if [ "${VARI}" = "${VAR}" ]
@@ -265,7 +270,7 @@ load_mdstatus()
 
 
 # Show unRAID status;
-unRAID_status() 
+unRAID_status()
 {
 
     load_mdstatus $@
@@ -287,16 +292,16 @@ unRAID_status()
         (( i++ ))
     done
 
-    if [ "${SMARTCTL}" = "YES" ]; then 
+    if [ "${SMARTCTL}" = "YES" ]; then
        echo "SMART overall health assessment"
        ls -1 /dev/sd[a-z] /dev/hd[a-z]  | while read DEVICE
        do echo -e "${DEVICE}: \c"
           smartctl -n standby -H ${DEVICE} 2>&1 | egrep -v 'Home|===|^$|smartctl version|mandatory SMART' 
-       done 
+       done
     fi
 
     # echo "Services which may be active on the Array"
-    # [ -x /etc/rc.d/init.d/vmware  ] && /etc/rc.d/init.d/vmware status 
+    # [ -x /etc/rc.d/init.d/vmware  ] && /etc/rc.d/init.d/vmware status
     # [ -x /etc/rc.d/rc.samba ] && /etc/rc.d/rc.samba status
     # [ -x /etc/rc.d/rc.nfsd  ] && /etc/rc.d/rc.nfsd  status
 
@@ -308,7 +313,7 @@ unRAID_status()
         for pid in $(fuser -cu $fs 2>/dev/null)
         do  ps --no-headers -fp ${pid}
         done > ${PSTMP}
-    done 
+    done
     if [ -s "${PSTMP}" ]
        then echo -e "ACTIVE PIDS on the array"
             cat < ${PSTMP}
