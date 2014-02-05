@@ -1,0 +1,25 @@
+#!/bin/bash
+
+COMMAND=/sbin/powerdown
+SRC_COMMAND=/boot/custom/bin/powerdown
+INSTALL=1
+
+if [ ${DEBUG:=0} -gt 0 ]
+   then set -x -v
+fi
+
+if [ -f ${SRC_COMMAND} -a ! -f ${COMMAND} -a "${INSTALL:=0}" -gt 0 ]
+   then fromdos < ${SRC_COMMAND} > ${COMMAND}
+	chmod u=rwx ${COMMAND}
+fi
+
+if [ -x ${COMMAND} ];then 
+   if ! grep "${COMMAND}" /etc/inittab > /dev/null ; then 
+      grep -v 'ca::ctrlaltdel:/sbin/shutdown' < /etc/inittab > /etc/inittab.tmp
+      echo "ca::ctrlaltdel:/sbin/powerdown" >> /etc/inittab.tmp
+      mv /etc/inittab.tmp /etc/inittab
+      /sbin/telinit q
+   fi
+fi
+
+sysctl -w kernel.poweroff_cmd="/sbin/powerdown"
