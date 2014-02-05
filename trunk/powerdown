@@ -2,9 +2,7 @@
 
 alias logger="/usr/bin/logger -is -plocal7.info -tpowerdown" 
 
-if [ ${DEBUG:=0} -gt 0 ]
-   then set -x -v
-fi
+[ ${DEBUG:=0} -gt 0 ] && set -x -v
 
 if [ -z "${1}" ]
    then OPT="-h"
@@ -21,9 +19,6 @@ fi
 
 trap "rm -f /var/run/powerdown.pid" EXIT HUP INT QUIT
 
-# shutdown initiates rc.unRAID stop
-# /etc/rc.d/rc.unRAID stop
-
-# /sbin/poweroff
+# Initiate shutdown - unRAID stop will be executed by shutdown
 logger "Initiating Shutdown with ${1}"
 /sbin/shutdown -t5 ${OPT} now
