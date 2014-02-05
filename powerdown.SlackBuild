@@ -8,13 +8,13 @@ CWD=`pwd`
 TMP=${TMP:-/tmp/tgz}
 PKG=$TMP/powerdown
 NAME=powerdown  
-VERSION=1.05
+VERSION=2.00
 ARCH=${ARCH:-noarch}
 BUILD=unRAID
 SOURCE=http://www.cotrone.com/rob/projects/unraid/$NAME-$VERSION.tar.gz
 
 if [ ! -e $NAME-$VERSION.tar.gz ]
-   then echo wget -c $SOURCE
+   then echo skipping wget -c $SOURCE
 fi
 
 if [ ! -d $TMP ]
@@ -53,8 +53,9 @@ chown -R root:root .
 # Here is where the manual build install commands go.
 
 install -d ${PKG}/sbin
+install -d ${PKG}/usr/man
 install -p -m550 ${CWD}/powerdown ${PKG}/sbin
-install -d ${PKG}/etc/rc.d
+install -d ${PKG}/etc/rc.d ${PKG}/etc/rc.d/rc.unRAID.d
 install -p -m550 ${CWD}/rc.unRAID ${PKG}/etc/rc.d
 install -p -m550 ${CWD}/rcdstock ${PKG}/etc/rc.d
 
@@ -67,7 +68,8 @@ sed "s/#.##/${VERSION}/g" < ${CWD}/slack-desc > $PKG/usr/doc/$NAME-$VERSION/slac
 cat $CWD/$NAME.SlackBuild > $PKG/usr/doc/$NAME-$VERSION/$NAME.SlackBuild
 cat $CWD/doinst.sh  > $PKG/install/doinst.sh
 
-gzip -9 $PKG/usr/man/*/*
+# gzip -9 $PKG/usr/man/*/*
+find $PKG/usr/man -type f -exec gzip -9v {} \;
 
 cd $PKG
 requiredbuilder -y -v -s $CWD $PKG
