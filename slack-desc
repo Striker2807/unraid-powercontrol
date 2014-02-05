@@ -9,13 +9,13 @@ powerdown: STATUS=YES     Show status upon installation
 powerdown: START=YES      do initial start upon installation
 powerdown: 
 powerdown: Install with VAR's as defined above like:
-powerdown: VAR=YES OTHERVAR=YES installpkg powerdown-1.02-noarch-unRAID.tgz
+powerdown: VAR=YES OTHERVAR=YES installpkg powerdown-#.##-noarch-unRAID.tgz
 powerdown: Like Like: 
-powerdown: CTRLALTDEL=yes installpkg powerdown-1.02-noarch-unRAID.tgz
+powerdown: CTRLALTDEL=yes installpkg powerdown-#.##-noarch-unRAID.tgz
 powerdown: 
 powerdown: /etc/rc.d/rc.unRAID script has basic pre-power down functions
 powerdown: Hooks are placed in /etc/rc.d/rc.local_shutdown
-powerdown: to allow ormal poweroff/shutdown commands do a graceful shutdown
+powerdown: to allow normal poweroff/shutdown commands do a graceful shutdown
 powerdown: 
 powerdown: Diagnostic mode for quick syslog dump/save to /boot/logs
 powerdown: call as /etc/rc.d/rc.unRAID syslog 

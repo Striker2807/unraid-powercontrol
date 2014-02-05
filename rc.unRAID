@@ -19,6 +19,7 @@ LOGSAVE="10"
 [ ! -d ${LOGDIR} ] && mkdir -p ${LOGDIR}
 
 PATH=$PATH:/sbin:/usr/sbin:/boot/custom/bin
+ACTIVEPIDS="no"
 
 # Alter this to NO or anything other then YES
 # To disable calls to these diagnostics
@@ -60,13 +61,13 @@ diagnostic_dump()
     logger -tdiskstats  < /proc/diskstats
 
     if [ "${HDPARM}" = "YES" ] ; then
-       ls -1 /dev/sd[a-z] /dev/hd[a-z]  | while read DEVICE
+       ls -1 2>/dev/null /dev/sd[a-z] /dev/hd[a-z] | while read DEVICE
        do hdparm -I -i ${DEVICE}
        done 2>&1 | logger -thdparm
     fi
 
     if [ "${SMARTCTL}" = "YES" ] ; then
-       ls -1 /dev/sd[a-z] /dev/hd[a-z]  | while read DEVICE
+       ls -1 2>/dev/null /dev/sd[a-z] /dev/hd[a-z]  | while read DEVICE
        do smartctl -n standby -d ata -a ${DEVICE}
        done 2>&1 | sed 's/\t/        /g' | logger -tsmartctl
     fi
@@ -80,8 +81,8 @@ diagnostic_dump()
 
     BC=/boot/config
     for FILE in ${BC}/*.cfg ${BC}/shares/*
-    do  BFILE=${FILE##*/}  # Basename of FILE
-        logger -t${BFILE} < ${FILE}
+    do  BFILE="${FILE##*/}"  # Basename of FILE
+        logger -t"${BFILE}" < "${FILE}"
     done
 
     if [ -e /proc/mdcmd ]
@@ -160,7 +161,7 @@ unRAID_stop()
 {
     # lines added by SlrG
     logger "Stopping Plugins."
-    comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -- "/etc/rc.d") | while read line ; do echo Sending \"$line stop\"; $line stop ; done
+    comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -- "/etc/rc.d") | while read line; do echo Sending \"/etc/rc.d/$line stop\"; /etc/rc.d/$line stop; done
     # end of lines added by SlrG
 
     logger "Stopping unRAID."
@@ -171,20 +172,22 @@ unRAID_stop()
     [ -x /etc/rc.d/rc.samba ] && /etc/rc.d/rc.samba stop
     [ -x /etc/rc.d/rc.nfsd  ] && /etc/rc.d/rc.nfsd  stop
 
-    logger "Killing active pids on the array drives"
-    for fs in /mnt/user /mnt/disk*
-    do  [ ! -d ${fs} ] && continue
-        for signal in TERM TERM KILL
-        do  for pid in $(fuser -cu $fs 2>/dev/null)
-            do  ps --no-headers -fp ${pid}
-                if kill -0 ${pid} 2>/dev/null
-                   then kill -${signal} ${pid}
-                fi
-            done
-            [ ! -z "${pid}" ] && sleep 1
-        done
-    done 2>&1 | logger
-
+	if [ $ACTIVEPIDS = "yes" ]
+	then
+		logger "Killing active pids on the array drives"
+		for fs in /mnt/user /mnt/disk*
+		do  [ ! -d ${fs} ] && continue
+			for signal in TERM TERM KILL
+			do  for pid in $(fuser -cu $fs 2>/dev/null)
+				do  ps --no-headers -fp ${pid}
+					if kill -0 ${pid} 2>/dev/null
+					   then kill -${signal} ${pid}
+					fi
+				done
+				[ ! -z "${pid}" ] && sleep 1
+			done
+		done 2>&1 | logger
+    fi
 
     logger "Umounting the drives"
     for disk in /mnt/disk*
@@ -197,7 +200,7 @@ unRAID_stop()
        then logger "Stopping the Array"
             echo status > /proc/mdcmd
             cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.1
-            echo stop > /proc/mdcmd
+            echo stop > /proc/mdcmd 2>/dev/null
             sleep 3
             echo status > /proc/mdcmd
             cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.2
@@ -272,7 +275,6 @@ load_mdstatus()
 # Show unRAID status;
 unRAID_status()
 {
-
     load_mdstatus $@
     printf "State: ${mdState}\n"
     if [ "${mdResyncPrcnt}" != "" ]
@@ -294,7 +296,7 @@ unRAID_status()
 
     if [ "${SMARTCTL}" = "YES" ]; then
        echo "SMART overall health assessment"
-       ls -1 /dev/sd[a-z] /dev/hd[a-z]  | while read DEVICE
+       ls -1 2>/dev/null /dev/sd[a-z] /dev/hd[a-z]  | while read DEVICE
        do echo -e "${DEVICE}: \c"
           smartctl -n standby -H ${DEVICE} 2>&1 | egrep -v 'Home|===|^$|smartctl version|mandatory SMART' 
        done
@@ -314,13 +316,14 @@ unRAID_status()
         do  ps --no-headers -fp ${pid}
         done > ${PSTMP}
     done
+    ACTIVEPIDS="no"
     if [ -s "${PSTMP}" ]
        then echo -e "ACTIVE PIDS on the array"
             cat < ${PSTMP}
+			ACTIVEPIDS="yes"
        else echo -e "No active PIDS on the array"
     fi
     rm -f ${PSTMP}
-
 }
 
 case "$1" in
