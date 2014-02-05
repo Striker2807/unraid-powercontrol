@@ -8,7 +8,7 @@ CWD=`pwd`
 TMP=${TMP:-/tmp/tgz}
 PKG=$TMP/powerdown
 NAME=powerdown  
-VERSION=1.02 
+VERSION=1.05
 ARCH=${ARCH:-noarch}
 BUILD=unRAID
 SOURCE=http://www.cotrone.com/rob/projects/unraid/$NAME-$VERSION.tar.gz
@@ -56,6 +56,7 @@ install -d ${PKG}/sbin
 install -p -m550 ${CWD}/powerdown ${PKG}/sbin
 install -d ${PKG}/etc/rc.d
 install -p -m550 ${CWD}/rc.unRAID ${PKG}/etc/rc.d
+install -p -m550 ${CWD}/rcdstock ${PKG}/etc/rc.d
 
 # The rest should be standard on all installations
 

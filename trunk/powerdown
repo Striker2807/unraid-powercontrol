@@ -21,7 +21,8 @@ fi
 
 trap "rm -f /var/run/powerdown.pid" EXIT HUP INT QUIT
 
-/etc/rc.d/rc.unRAID stop
+# shutdown initiates rc.unRAID stop
+# /etc/rc.d/rc.unRAID stop
 
 # /sbin/poweroff
 logger "Initiating Shutdown with ${1}"
