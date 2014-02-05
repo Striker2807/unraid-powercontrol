@@ -160,7 +160,7 @@ unRAID_stop()
 {
     # lines added by SlrG
     logger "Stopping Plugins."
-    comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -- "/etc/rc.d") | while read line ; do echo Sending \"$line stop\"; $line stop ; done
+    comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -- "/etc/rc.d") | while read line; do echo Sending \"/etc/rc.d/$line stop\"; /etc/rc.d/$line stop; done
     # end of lines added by SlrG
 
     logger "Stopping unRAID."
