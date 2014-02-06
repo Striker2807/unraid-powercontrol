@@ -1,9 +1,7 @@
 #!/bin/bash
 # Start/stop/restart unRAID.
 
-if [ ${DEBUG:=0} -gt 0 ]
-   then set -x -v
-fi
+[ ${DEBUG:=0} -gt 0 ] && set -x -v
 
 P=${0##*/}              # basename of program
 R=${0%%$P}              # dirname of program
@@ -19,7 +17,9 @@ LOGSAVE="10"
 [ ! -d ${LOGDIR} ] && mkdir -p ${LOGDIR}
 
 PATH=$PATH:/sbin:/usr/sbin:/boot/custom/bin
+# Active pids check
 ACTIVEPIDS="no"
+RCDIR=/etc/rc.d/rc.unRAID.d
 
 # Alter this to NO or anything other then YES
 # To disable calls to these diagnostics
@@ -31,6 +31,8 @@ if [ -f /etc/${P} ]
    then source /etc/${P}
 fi
 
+# no matter what.  Start from known directory
+cd /
 
 logger()
 {
@@ -38,7 +40,7 @@ logger()
 
   if [ "${F}" != "${1}" ]
      then F=""
-     else F="-t${P}"
+     else F="-t${P}[$$]"
   fi
 
   # /usr/bin/logger -is -plocal7.info ${F} $*
@@ -51,6 +53,7 @@ diagnostic_dump()
     echo "Capturing information to syslog. Please wait..."
 
     logger -tversion -s < /proc/version
+    logger -tversion -s < /etc/unraid-version
     logger -tcmdline    < /proc/cmdline
     logger -tmeminfo    < /proc/meminfo
     logger -tdevices    < /proc/devices
@@ -60,14 +63,17 @@ diagnostic_dump()
     logger -tmounts     < /proc/mounts
     logger -tdiskstats  < /proc/diskstats
 
+    egrep -i 'model name|MHz|cache|bogo|flags' < /proc/cpuinfo \
+	  | sed 's/\t//g' | logger -tcpuinfo
+
     if [ "${HDPARM}" = "YES" ] ; then
-       ls -1 2>/dev/null /dev/sd[a-z] /dev/hd[a-z] | while read DEVICE
+       ls -1 /dev/[hs]d[a-z] | while read DEVICE
        do hdparm -I -i ${DEVICE}
-       done 2>&1 | logger -thdparm
+       done 2>&1 | sed 's/\t/        /g' | logger -tsmartctl
     fi
 
     if [ "${SMARTCTL}" = "YES" ] ; then
-       ls -1 2>/dev/null /dev/sd[a-z] /dev/hd[a-z]  | while read DEVICE
+       ls -1 /dev/[hs]d[a-z] | while read DEVICE
        do smartctl -n standby -d ata -a ${DEVICE}
        done 2>&1 | sed 's/\t/        /g' | logger -tsmartctl
     fi
@@ -140,6 +146,23 @@ save_syslog()
     fi
 }
 
+# unraid safe check.
+unRAID_safecheck()
+{
+  for fs in /mnt/user* /mnt/cache /mnt/disk* /dev/md*
+  do  [ ! -d ${fs} ] && continue
+    for pid in $(fuser -cu $fs 2>/dev/null)
+    do  ps --no-headers -fp ${pid}
+        if [ ${pid} = "$$" -o ${pid} = "$PPID" ]
+           then echo "You are on the array!. Terminating."
+                return 1
+        fi
+    done
+  done
+  return 0
+}
+
+
 # Start unraid:
 unRAID_start()
 {
@@ -154,28 +177,53 @@ unRAID_start()
 
     [ ! -x ${SD_RCFILE} ] && chmod u+x ${SD_RCFILE}
 
+    find ${RCDIR} -type f -name 'S[0-9][0-9]*' | while read script
+    do  if [ -x ${script} ] ; then 
+          logger "Running: ${script} start"
+           ${script} start
+       fi
+    done
+
 }
 
 # Stop unraid:
 unRAID_stop()
 {
+
+    if [ ! unRAID_safecheck ]
+       then return 1
+    fi
+
     # lines added by SlrG
     logger "Stopping Plugins."
-    comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -- "/etc/rc.d") | while read line; do echo Sending \"/etc/rc.d/$line stop\"; /etc/rc.d/$line stop; done
+    # files only - do not include directories.
+    comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -p "/etc/rc.d" | grep -v "/") | while read line; do echo Sending \"/etc/rc.d/$line stop\"; /etc/rc.d/$line stop; done
     # end of lines added by SlrG
 
     logger "Stopping unRAID."
 
-    diagnostic_dump
+    find ${RCDIR} -type f -name 'K[0-9][0-9]*' | while read script
+    do  if [ -x ${script} ] ; then
+           logger "Running: ${script} stop"
+           ${script} stop
+        fi
+    done
+    # diagnostic_dump
 
     [ -x /etc/rc.d/init.d/vmware  ] && /etc/rc.d/init.d/vmware stop
     [ -x /etc/rc.d/rc.samba ] && /etc/rc.d/rc.samba stop
     [ -x /etc/rc.d/rc.nfsd  ] && /etc/rc.d/rc.nfsd  stop
 
+    swapoff -av 2>&1  | logger
+
+    mount | grep loop | while read FS THE_REST
+    do   umount -vf $FS;
+    done 2>&1 | logger
+
 	if [ $ACTIVEPIDS = "yes" ]
 	then
 		logger "Killing active pids on the array drives"
-		for fs in /mnt/user /mnt/disk*
+        for fs in /mnt/cache /mnt/user* /mnt/disk*
 		do  [ ! -d ${fs} ] && continue
 			for signal in TERM TERM KILL
 			do  for pid in $(fuser -cu $fs 2>/dev/null)
@@ -188,6 +236,10 @@ unRAID_stop()
 			done
 		done 2>&1 | logger
     fi
+
+    # Last ditch effort.
+    pkill telnetd 2>&1 | logger
+    fuser -k /mnt/disk* /mnt/cache /mnt/user* /dev/md* 2>&1 | logger
 
     logger "Umounting the drives"
     for disk in /mnt/disk*
@@ -248,16 +300,18 @@ load_mdstatus()
     fi
 
     # Reset IFS to add = sign
-    IFS=" =
-"
+    IFS=" = "
 
     # Read TMP file assigning shell variables from mdcmd variables
     MDI=0  # Set starting point for indexed variables
     while read LINE
     do  [ -z "${LINE}" ] && continue
+        # LINE=`echo "${LINE}" | tr -d '\n'`
         VAR="${LINE%=*}"   # Separate var from var=value
-        VALUE="${LINE#*=}" # separate value from var=value
+        # separate value from var=value
+        VALUE="${LINE#*=}"
         VARI="${VAR%\.*}"  # separate .#  from var
+        # echo "VAR=$VAR VARI=$VARI VALUE=$VALUE"
         if [ "${VARI}" = "${VAR}" ]
            then eval "${VAR}='${VALUE}'"
                 continue
@@ -296,10 +350,12 @@ unRAID_status()
 
     if [ "${SMARTCTL}" = "YES" ]; then
        echo "SMART overall health assessment"
-       ls -1 2>/dev/null /dev/sd[a-z] /dev/hd[a-z]  | while read DEVICE
+       ls -1 /dev/[hs]d[a-z] | while read DEVICE
        do echo -e "${DEVICE}: \c"
-          smartctl -n standby -H ${DEVICE} 2>&1 | egrep -v 'Home|===|^$|smartctl version|mandatory SMART' 
+          # smartctl -n standby -H ${DEVICE} 2>&1 | egrep -v 'Home|===|^$|smartctl version|mandatory SMART' 
+          smartctl -n standby -H ${DEVICE} 2>&1 | egrep -i 'Health'
        done
+       echo
     fi
 
     # echo "Services which may be active on the Array"
@@ -310,7 +366,7 @@ unRAID_status()
     # find active pids on array save to tmp file
     # so size (-s) can be tested and print if > 0
     PSTMP="/tmp/ps.$$"
-    for fs in /mnt/user /mnt/disk*
+    for fs in /mnt/user* /mnt/cache /mnt/disk* /dev/md*
     do  [ ! -d ${fs} ] && continue
         for pid in $(fuser -cu $fs 2>/dev/null)
         do  ps --no-headers -fp ${pid}
