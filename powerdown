@@ -1,4 +1,5 @@
 #!/bin/bash
+#
 
 alias logger="/usr/bin/logger -is -plocal7.info -tpowerdown" 
 

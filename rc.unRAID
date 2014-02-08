@@ -1,5 +1,6 @@
 #!/bin/bash
 # Start/stop/restart unRAID.
+VERSION="2.00"
 
 # be sure rc.unRAID is not run twice
 if [ -f /var/run/rc.unRAID.pid ]
@@ -9,6 +10,8 @@ if [ -f /var/run/rc.unRAID.pid ]
 fi
 
 trap "rm -f /var/run/rc.unRAID.pid" EXIT HUP INT QUIT
+
+echo "Powerdown V$VERSION"
 
 [ ${DEBUG:=0} -gt 0 ] && set -x -v
 
@@ -178,27 +181,12 @@ unRAID_pid_check()
     rm -f ${PSTMP}
 }
 
-# unraid safe check.
-unRAID_safecheck()
-{
-  for fs in /mnt/user* /mnt/cache /mnt/disk* /dev/md*
-  do  [ ! -d ${fs} ] && continue
-    for pid in $(fuser -cu $fs 2>/dev/null)
-    do  ps --no-headers -fp ${pid}
-        if [ ${pid} = "$$" -o ${pid} = "$PPID" ]
-           then echo "You are on the array!. Terminating."
-           logger "You are on the array!. Terminating."
-                return 1
-        fi
-    done
-  done
-  return 0
-}
-
-
 # Start unraid:
 unRAID_start()
 {
+	echo "Not yet implemented!"
+	exit
+
     logger "Starting Plugins."
 
     # files only - do not include directories.
@@ -235,10 +223,7 @@ unRAID_start()
 # Stop unraid:
 unRAID_stop()
 {
-
-    if [ ! unRAID_safecheck ]
-       then return 1
-    fi
+	logger "Powerdown V$VERSION"
 
     logger "Stopping Plugins."
 
@@ -320,6 +305,9 @@ unRAID_stop()
 # Restart unRAID:
 unRAID_restart()
 {
+	echo "Not yet implemented!"
+	exit
+
     unRAID_stop
     sleep 1
     unRAID_start
