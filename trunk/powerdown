@@ -10,6 +10,7 @@ if [ -z "${1}" ]
 fi
 
 logger "Powerdown initiated"
+echo "Powerdown initiated"
 
 if [ -f /var/run/powerdown.pid ]
    then logger "Powerdown already active, this one is exiting"
@@ -19,6 +20,9 @@ fi
 
 trap "rm -f /var/run/powerdown.pid" EXIT HUP INT QUIT
 
-# Initiate shutdown - unRAID stop will be executed by shutdown
+# Initiate shutdown
 logger "Initiating Shutdown with ${1}"
 /sbin/shutdown -t5 ${OPT} now
+
+trap - EXIT HUP INT QUIT
+rm -f /var/run/powerdown.pid

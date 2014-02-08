@@ -1,6 +1,15 @@
 #!/bin/bash
 # Start/stop/restart unRAID.
 
+# be sure rc.unRAID is not run twice
+if [ -f /var/run/rc.unRAID.pid ]
+   then logger "rc.unRAID already active, this one is exiting"
+	exit
+   else echo $$ > /var/run/rc.unRAID.pid
+fi
+
+trap "rm -f /var/run/rc.unRAID.pid" EXIT HUP INT QUIT
+
 [ ${DEBUG:=0} -gt 0 ] && set -x -v
 
 P=${0##*/}              # basename of program
@@ -19,6 +28,7 @@ LOGSAVE="10"
 PATH=$PATH:/sbin:/usr/sbin:/boot/custom/bin
 # Active pids check
 ACTIVEPIDS="no"
+# directory for extra script processing
 RCDIR=/etc/rc.d/rc.unRAID.d
 
 # Alter this to NO or anything other then YES
@@ -146,6 +156,28 @@ save_syslog()
     fi
 }
 
+# check for any active pids on the array
+unRAID_pid_check()
+{
+    # find active pids on array save to tmp file
+    # so size (-s) can be tested and print if > 0
+    PSTMP="/tmp/ps.$$"
+    for fs in /mnt/user* /mnt/cache /mnt/disk* /dev/md*
+    do  [ ! -d ${fs} ] && continue
+        for pid in $(fuser -cu $fs 2>/dev/null)
+        do  ps --no-headers -fp ${pid} > ${PSTMP}
+        done
+    done
+
+    ACTIVEPIDS="no"
+    if [ -s "${PSTMP}" ]
+       then echo -e "Active PIDS on the array"
+			ACTIVEPIDS="yes"
+       else echo -e "No active PIDS on the array"
+    fi
+    rm -f ${PSTMP}
+}
+
 # unraid safe check.
 unRAID_safecheck()
 {
@@ -155,6 +187,7 @@ unRAID_safecheck()
     do  ps --no-headers -fp ${pid}
         if [ ${pid} = "$$" -o ${pid} = "$PPID" ]
            then echo "You are on the array!. Terminating."
+           logger "You are on the array!. Terminating."
                 return 1
         fi
     done
@@ -166,24 +199,37 @@ unRAID_safecheck()
 # Start unraid:
 unRAID_start()
 {
-    logger "Starting unRAID."
+    logger "Starting Plugins."
 
-    SD_RCFILE=/etc/rc.d/rc.local_shutdown
-    RCFILE=/etc/rc.d/rc.unRAID
+    # files only - do not include directories.
+    comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -p "/etc/rc.d" | grep -v "/") | while read line; do logger Running: \"/etc/rc.d/$line start\"; /etc/rc.d/$line start; done
 
-    if ! grep ${RCFILE} ${SD_RCFILE} >/dev/null 2>&1
-       then echo -e "\n\n[ -x ${RCFILE} ] && ${RCFILE} stop\n" >> ${SD_RCFILE}
-    fi
+    logger "Processing $RCDIR scripts."
 
-    [ ! -x ${SD_RCFILE} ] && chmod u+x ${SD_RCFILE}
-
+    # run scripts in the /etc/rc.d/rc.unRAID.d directory
     find ${RCDIR} -type f -name 'S[0-9][0-9]*' | while read script
     do  if [ -x ${script} ] ; then 
-          logger "Running: ${script} start"
+          logger Running: \"${script} start\"
            ${script} start
        fi
     done
 
+    logger "Starting unRAID."
+
+    if [ -e /proc/mdcmd ]
+       then logger "Starting the Array"
+            echo status > /proc/mdcmd
+            cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.1
+            echo start > /proc/mdcmd 2>/dev/null
+            sleep 3
+            echo status > /proc/mdcmd
+            cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.2
+            diff -u /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2 | logger -t mdstatusdiff
+            rm   -f /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2
+    fi
+
+    [ -x /etc/rc.d/rc.samba ] && /etc/rc.d/rc.samba start
+    [ -x /etc/rc.d/rc.nfsd  ] && /etc/rc.d/rc.nfsd  start
 }
 
 # Stop unraid:
@@ -194,23 +240,23 @@ unRAID_stop()
        then return 1
     fi
 
-    # lines added by SlrG
     logger "Stopping Plugins."
+
     # files only - do not include directories.
-    comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -p "/etc/rc.d" | grep -v "/") | while read line; do echo Sending \"/etc/rc.d/$line stop\"; /etc/rc.d/$line stop; done
-    # end of lines added by SlrG
+    comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -p "/etc/rc.d" | grep -v "/") | while read line; do logger Running: \"/etc/rc.d/$line stop\"; /etc/rc.d/$line stop; done
 
-    logger "Stopping unRAID."
+    logger "Processing $RCDIR scripts."
 
+    # run scripts in the /etc/rc.d/rc.unRAID.d directory
     find ${RCDIR} -type f -name 'K[0-9][0-9]*' | while read script
     do  if [ -x ${script} ] ; then
-           logger "Running: ${script} stop"
+           logger Running: \"${script} stop\"
            ${script} stop
         fi
     done
-    # diagnostic_dump
 
-    [ -x /etc/rc.d/init.d/vmware  ] && /etc/rc.d/init.d/vmware stop
+    logger "Stopping unRAID."
+
     [ -x /etc/rc.d/rc.samba ] && /etc/rc.d/rc.samba stop
     [ -x /etc/rc.d/rc.nfsd  ] && /etc/rc.d/rc.nfsd  stop
 
@@ -219,6 +265,9 @@ unRAID_stop()
     mount | grep loop | while read FS THE_REST
     do   umount -vf $FS;
     done 2>&1 | logger
+
+    # check for any active pids on the array
+    unRAID_pid_check
 
 	if [ $ACTIVEPIDS = "yes" ]
 	then
@@ -232,9 +281,11 @@ unRAID_stop()
 					   then kill -${signal} ${pid}
 					fi
 				done
-				[ ! -z "${pid}" ] && sleep 1
+				[ ! -z "${pid}" ] && sleep 2
 			done
 		done 2>&1 | logger
+	else
+		logger "No active PIDS on the array"
     fi
 
     # Last ditch effort.
@@ -249,15 +300,15 @@ unRAID_stop()
     sync
 
     if [ -e /proc/mdcmd ]
-       then logger "Stopping the Array"
-            echo status > /proc/mdcmd
-            cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.1
-            echo stop > /proc/mdcmd 2>/dev/null
-            sleep 3
-            echo status > /proc/mdcmd
-            cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.2
-            diff -u /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2 | logger -t mdstatusdiff
-            rm   -f /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2
+	then logger "Stopping the Array"
+		echo status > /proc/mdcmd
+		cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.1
+		echo stop > /proc/mdcmd 2>/dev/null
+		sleep 3
+		echo status > /proc/mdcmd
+		cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.2
+		diff -u /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2 | logger -t mdstatusdiff
+		rm   -f /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2
     fi
 
     save_syslog
@@ -359,36 +410,22 @@ unRAID_status()
     fi
 
     # echo "Services which may be active on the Array"
-    # [ -x /etc/rc.d/init.d/vmware  ] && /etc/rc.d/init.d/vmware status
     # [ -x /etc/rc.d/rc.samba ] && /etc/rc.d/rc.samba status
     # [ -x /etc/rc.d/rc.nfsd  ] && /etc/rc.d/rc.nfsd  status
 
-    # find active pids on array save to tmp file
-    # so size (-s) can be tested and print if > 0
-    PSTMP="/tmp/ps.$$"
-    for fs in /mnt/user* /mnt/cache /mnt/disk* /dev/md*
-    do  [ ! -d ${fs} ] && continue
-        for pid in $(fuser -cu $fs 2>/dev/null)
-        do  ps --no-headers -fp ${pid}
-        done > ${PSTMP}
-    done
-    ACTIVEPIDS="no"
-    if [ -s "${PSTMP}" ]
-       then echo -e "ACTIVE PIDS on the array"
-            cat < ${PSTMP}
-			ACTIVEPIDS="yes"
-       else echo -e "No active PIDS on the array"
-    fi
-    rm -f ${PSTMP}
+	unRAID_pid_check
 }
 
 case "$1" in
-    'start'  ) unRAID_start   ;;
-    'stop'   ) unRAID_stop    ;;
-    'restart') unRAID_restart ;;
-    'install') unRAID_install ;;
-    'syslog' ) diagnostic_dump; save_syslog ;;
+    'start'  ) unRAID_start;;
+    'stop'   ) unRAID_stop;;
+    'restart') unRAID_restart;;
     'status' ) shift; unRAID_status $@;;
+    'diag'   ) diagnostic_dump;;
+	'syslog' ) save_syslog;;
     'msg'    ) shift; logger $@;;
-    *) echo "usage $0 start|stop|restart|syslog|status";;
+    *) echo "usage $0 start|stop|restart|status|diag|syslog|msg";;
 esac
+
+trap - EXIT HUP INT QUIT
+rm -f /var/run/rc.unRAID.pid
