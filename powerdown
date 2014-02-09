@@ -21,6 +21,9 @@ fi
 
 trap "rm -f /var/run/powerdown.pid" EXIT HUP INT QUIT
 
+# process custom scripts before unraid takes over
+/etc/rc.d/rc.unRAID custom
+
 # Initiate shutdown
 logger "Initiating Shutdown with ${1}"
 /sbin/shutdown -t5 ${OPT} now
