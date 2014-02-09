@@ -1,6 +1,6 @@
 #!/bin/bash
 # Start/stop/restart unRAID.
-VERSION="2.00"
+VERSION="2.01"
 
 # be sure rc.unRAID is not run twice
 if [ -f /var/run/rc.unRAID.pid ]
@@ -111,7 +111,6 @@ diagnostic_dump()
     fi
 
     unRAID_status       | logger -tstatus -s
-
 }
 
 save_syslog()
@@ -192,15 +191,7 @@ unRAID_start()
     # files only - do not include directories.
     comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -p "/etc/rc.d" | grep -v "/") | while read line; do logger Running: \"/etc/rc.d/$line start\"; /etc/rc.d/$line start; done
 
-    logger "Processing $RCDIR scripts."
-
-    # run scripts in the /etc/rc.d/rc.unRAID.d directory
-    find ${RCDIR} -type f -name 'S[0-9][0-9]*' | while read script
-    do  if [ -x ${script} ] ; then 
-          logger Running: \"${script} start\"
-           ${script} start
-       fi
-    done
+	unRAID_custom
 
     logger "Starting unRAID."
 
@@ -229,16 +220,6 @@ unRAID_stop()
 
     # files only - do not include directories.
     comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -p "/etc/rc.d" | grep -v "/") | while read line; do logger Running: \"/etc/rc.d/$line stop\"; /etc/rc.d/$line stop; done
-
-    logger "Processing $RCDIR scripts."
-
-    # run scripts in the /etc/rc.d/rc.unRAID.d directory
-    find ${RCDIR} -type f -name 'K[0-9][0-9]*' | while read script
-    do  if [ -x ${script} ] ; then
-           logger Running: \"${script} stop\"
-           ${script} stop
-        fi
-    done
 
     logger "Stopping unRAID."
 
@@ -313,7 +294,19 @@ unRAID_restart()
     unRAID_start
 }
 
+# process custom scripts in $RCDIR
+unRAID_custom()
+{
+    logger "Processing $RCDIR scripts."
 
+    # run scripts in the /etc/rc.d/rc.unRAID.d directory
+    find ${RCDIR} -type f -name 'K[0-9][0-9]*' | while read script
+    do  if [ -x ${script} ] ; then
+           logger Running: \"${script} stop\"
+           ${script} stop
+        fi
+    done
+}
 
 load_mdstatus()
 {
@@ -408,7 +401,8 @@ case "$1" in
     'start'  ) unRAID_start;;
     'stop'   ) unRAID_stop;;
     'restart') unRAID_restart;;
-    'status' ) shift; unRAID_status $@;;
+    'restart') unRAID_restart;;
+    'custom' ) unRAID_custom;;
     'diag'   ) diagnostic_dump;;
 	'syslog' ) save_syslog;;
     'msg'    ) shift; logger $@;;

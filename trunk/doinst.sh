@@ -84,10 +84,9 @@ if [ ! -z "${LOGROTATE}" ];then
    fi
 fi
 
-
 # Joe L. & Weebotech Addition for power handler script.
-# sysctl -w kernel.poweroff_cmd="/sbin/powerdown"
+sysctl -w kernel.poweroff_cmd="/sbin/powerdown"
 
 # http://lime-technology.com/forum/index.php?topic=2068.msg18287#msg18287
 # Joe L's mechanism for chaning the power handler"
-# sed -i -e "s/init 0/powerdown/" /etc/acpi/acpi_handler.sh   
+sed -i -e "s/init 0/powerdown/" /etc/acpi/acpi_handler.sh   

@@ -1,5 +1,5 @@
 #!/bin/sh
-# based on the Slackware 12.0 SlackBuild
+# based on the Slackware 14.1 SlackBuild
 # Packager Rob Cotrone  ( WeeboTech at mydomain dot com)
 # http://lime-technology.com
 # Required: 
@@ -8,7 +8,7 @@ CWD=`pwd`
 TMP=${TMP:-/tmp/tgz}
 PKG=$TMP/powerdown
 NAME=powerdown  
-VERSION=2.00
+VERSION=2.01
 ARCH=${ARCH:-noarch}
 BUILD=unRAID
 SOURCE=http://www.cotrone.com/rob/projects/unraid/$NAME-$VERSION.tar.gz
