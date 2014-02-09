@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+
+alias logger="/usr/bin/logger -is -plocal7.info -tpowerdown" 
+
+[ ${DEBUG:=0} -gt 0 ] && set -x -v
+
+if [ -z "${1}" ]
+   then OPT="-h"
+   else OPT="${1}"
+fi
+
+logger "Powerdown initiated"
+echo "Powerdown initiated"
+
+if [ -f /var/run/powerdown.pid ]
+   then logger "Powerdown already active, this one is exiting"
+	exit
+   else echo $$ > /var/run/powerdown.pid
+fi
+
+trap "rm -f /var/run/powerdown.pid" EXIT HUP INT QUIT
+
+# Initiate shutdown
+logger "Initiating Shutdown with ${1}"
+/sbin/shutdown -t5 ${OPT} now
+
+trap - EXIT HUP INT QUIT
+rm -f /var/run/powerdown.pid
