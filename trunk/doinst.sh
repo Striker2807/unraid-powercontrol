@@ -19,6 +19,16 @@ config() {
 #do # config etc/$i; 
 #done
 
+POWERDOWNHOME=/boot/config/plugins/powerdown
+CUST_RCDIR=/etc/rc.d/rc.unRAID.d/
+
+if [ ! -d "${POWERDOWNHOME}/" ]
+then
+	mkdir ${POWERDOWNHOME}/
+	mkdir ${POWERDOWNHOME}/custom/
+fi
+cp ${POWERDOWNHOME}/custom/K* ${CUST_RCDIR} 2>/dev/null
+
 SD_RCFILE=/etc/rc.d/rc.local_shutdown
 RCFILE=/etc/rc.d/rc.unRAID
 
@@ -84,9 +94,8 @@ if [ ! -z "${LOGROTATE}" ];then
    fi
 fi
 
-# Joe L. & Weebotech Addition for power handler script.
-sysctl -w kernel.poweroff_cmd="/sbin/powerdown"
-
-# http://lime-technology.com/forum/index.php?topic=2068.msg18287#msg18287
-# Joe L's mechanism for chaning the power handler"
+# set the default power button press to /sbin/powerdown
+sed -i -e "s/event=.*/event=button power.*/" /etc/acpi/events/default
+sed -i -e "s/\/etc\/acpi\/acpi_handler.sh %e/\/sbin\/powerdown/" /etc/acpi/events/default
 sed -i -e "s/init 0/powerdown/" /etc/acpi/acpi_handler.sh   
+sysctl -w kernel.poweroff_cmd=/sbin/powerdown
