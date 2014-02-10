@@ -94,7 +94,10 @@ if [ ! -z "${LOGROTATE}" ];then
    fi
 fi
 
-# set the default power button press to /sbin/powerdown
+# set the default power button press to /sbin/powerdown and
+# be sure the correct powerdown script is used
+[ -f /usr/local/sbin/powerdown ] && mv /usr/local/sbin/powerdown /usr/local/sbin/unraid_powerdown
+cp /sbin/powerdown /usr/local/sbin/powerdown 2>/dev/null
 sed -i -e "s/event=.*/event=button power.*/" /etc/acpi/events/default
 sed -i -e "s/\/etc\/acpi\/acpi_handler.sh %e/\/sbin\/powerdown/" /etc/acpi/events/default
 sed -i -e "s/init 0/powerdown/" /etc/acpi/acpi_handler.sh   
