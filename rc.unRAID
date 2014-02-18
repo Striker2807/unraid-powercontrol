@@ -1,6 +1,6 @@
 #!/bin/bash
 # Start/stop/restart unRAID.
-VERSION="2.03"
+VERSION="2.04"
 
 # be sure rc.unRAID is not run twice
 if [ -f /var/run/rc.unRAID.pid ]
@@ -11,7 +11,11 @@ fi
 
 trap "rm -f /var/run/rc.unRAID.pid" EXIT HUP INT QUIT
 
-echo "Powerdown V$VERSION"
+if [ $1 = "-v" ]
+then
+	echo "Powerdown V$VERSION"
+	exit
+fi
 
 [ ${DEBUG:=0} -gt 0 ] && set -x -v
 
@@ -29,8 +33,6 @@ LOGSAVE="10"
 [ ! -d ${LOGDIR} ] && mkdir -p ${LOGDIR}
 
 PATH=$PATH:/sbin:/usr/sbin:/boot/custom/bin
-# Active pids check
-ACTIVEPIDS="no"
 # directory for extra script processing
 RCDIR=/etc/rc.d/rc.unRAID.d
 
@@ -111,6 +113,7 @@ diagnostic_dump()
     fi
 
     unRAID_status       | logger -tstatus -s
+
 }
 
 save_syslog()
@@ -164,17 +167,10 @@ unRAID_pid_check()
     # find active pids on array save to tmp file
     # so size (-s) can be tested and print if > 0
     PSTMP="/tmp/ps.$$"
-    for fs in /mnt/user* /mnt/cache /mnt/disk* /dev/md*
-    do  [ ! -d ${fs} ] && continue
-        for pid in $(fuser -cu $fs 2>/dev/null)
-        do  ps --no-headers -fp ${pid} > ${PSTMP}
-        done
-    done
+	fuser -mv /mnt/disk* /mnt/cache /mnt/user* /dev/md* 2>/dev/null > ${PSTMP}
 
-    ACTIVEPIDS="no"
     if [ -s "${PSTMP}" ]
        then echo -e "Active PIDS on the array"
-			ACTIVEPIDS="yes"
        else echo -e "No active PIDS on the array"
     fi
     rm -f ${PSTMP}
@@ -191,7 +187,15 @@ unRAID_start()
     # files only - do not include directories.
     comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -p "/etc/rc.d" | grep -v "/") | while read line; do logger Running: \"/etc/rc.d/$line start\"; /etc/rc.d/$line start; done
 
-	unRAID_custom
+    logger "Processing $RCDIR scripts."
+
+    # run scripts in the /etc/rc.d/rc.unRAID.d directory
+    find ${RCDIR} -type f -name 'S[0-9][0-9]*' | while read script
+    do  if [ -x ${script} ] ; then 
+          logger Running: \"${script} start\"
+           ${script} start
+       fi
+    done
 
     logger "Starting unRAID."
 
@@ -214,12 +218,27 @@ unRAID_start()
 # Stop unraid:
 unRAID_stop()
 {
-	logger "Powerdown V$VERSION"
+	logger "Powerdown $VERSION"
 
     logger "Stopping Plugins."
 
+	# add in any user skip files
+	if [ -f /boot/config/plugins/powerdown/rcdskip ]
+	then
+		fromdos </boot/config/plugins/powerdown/rcdskip >/var/tmp/rcdskip
+		cat /var/tmp/rcdskip >> /etc/rc.d/rcdstock
+	fi
+
     # files only - do not include directories.
-    comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -p "/etc/rc.d" | grep -v "/") | while read line; do logger Running: \"/etc/rc.d/$line stop\"; /etc/rc.d/$line stop; done
+    comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -p "/etc/rc.d" | grep -v "/") |	while read LINE
+    do  [ -z "${LINE}" ] && continue
+		# only if executable, not .bak, and not .swp
+		if [ -x "/etc/rc.d/${LINE}" ] && ! [[ "${LINE}" =~ ".bak" ]] && ! [[ "${LINE}" =~ ".swp." ]]
+		then
+			logger Running: \"/etc/rc.d/${LINE} stop\"
+			/etc/rc.d/${LINE} stop
+		fi
+	done
 
     logger "Stopping unRAID."
 
@@ -232,51 +251,35 @@ unRAID_stop()
     do   umount -vf $FS;
     done 2>&1 | logger
 
-    # check for any active pids on the array
-    unRAID_pid_check
+	echo "Killing active pids on the array drives"
+	logger "Killing active pids on the array drives"
+    fuser -k /mnt/disk* /mnt/cache /mnt/user* /dev/md* 2>/dev/null | logger
 
-	if [ $ACTIVEPIDS = "yes" ]
-	then
-		logger "Killing active pids on the array drives"
-        for fs in /mnt/cache /mnt/user* /mnt/disk*
-		do  [ ! -d ${fs} ] && continue
-			for signal in TERM TERM KILL
-			do  for pid in $(fuser -cu $fs 2>/dev/null)
-				do  ps --no-headers -fp ${pid}
-					if kill -0 ${pid} 2>/dev/null
-					   then kill -${signal} ${pid}
-					fi
-				done
-				[ ! -z "${pid}" ] && sleep 2
-			done
-		done 2>&1 | logger
-	else
-		logger "No active PIDS on the array"
-    fi
-
-    # Last ditch effort.
-    pkill telnetd 2>&1 | logger
-    fuser -k /mnt/disk* /mnt/cache /mnt/user* /dev/md* 2>&1 | logger
-
+	echo "Unmounting the drives"
     logger "Umounting the drives"
     for disk in /mnt/disk*
     do  /bin/umount -v ${disk}
-    done 2>&1 | logger
+    done 2>/dev/null | logger
 
+	echo "Synching data"
+	logger "Synching data"
     sync
 
     if [ -e /proc/mdcmd ]
-	then logger "Stopping the Array"
+	then
+		echo "Stopping the Array"
+		logger "Stopping the Array"
 		echo status > /proc/mdcmd
 		cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.1
 		echo stop > /proc/mdcmd 2>/dev/null
-		sleep 3
+		sleep 5
 		echo status > /proc/mdcmd
 		cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.2
 		diff -u /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2 | logger -t mdstatusdiff
 		rm   -f /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2
     fi
 
+	echo "Saving syslog"
     save_syslog
 
     # killall emhttp
@@ -300,7 +303,7 @@ unRAID_custom()
     logger "Processing $RCDIR scripts."
 
     # run scripts in the /etc/rc.d/rc.unRAID.d directory
-    find ${RCDIR} -type f -name 'K[0-9][0-9]*' | while read script
+    find ${RCDIR} -type f -name 'K[0-9][0-9]*' | sort | while read script
     do  if [ -x ${script} ] ; then
            logger Running: \"${script} stop\"
            ${script} stop
@@ -401,7 +404,7 @@ case "$1" in
     'start'  ) unRAID_start;;
     'stop'   ) unRAID_stop;;
     'restart') unRAID_restart;;
-    'restart') unRAID_restart;;
+    'status' ) unRAID_status;;
     'custom' ) unRAID_custom;;
     'diag'   ) diagnostic_dump;;
 	'syslog' ) save_syslog;;
