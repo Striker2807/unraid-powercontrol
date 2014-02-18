@@ -13,6 +13,9 @@ fi
 logger "Powerdown initiated"
 echo "Powerdown initiated"
 
+# display version
+/etc/rc.d/rc.unRAID -v
+
 if [ -f /var/run/powerdown.pid ]
    then logger "Powerdown already active, this one is exiting"
 	exit
@@ -21,8 +24,13 @@ fi
 
 trap "rm -f /var/run/powerdown.pid" EXIT HUP INT QUIT
 
-# process custom scripts before unraid takes over
-/etc/rc.d/rc.unRAID custom
+# process custom scripts before shutting down
+if [ -f /etc/rc.d/rc.unRAID ]
+then
+	logger "Processing custom scripts"
+	echo "Processing custom scripts"
+	/etc/rc.d/rc.unRAID custom
+fi
 
 # Initiate shutdown
 logger "Initiating Shutdown with ${1}"
