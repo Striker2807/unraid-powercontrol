@@ -1,6 +1,25 @@
 #!/bin/bash
-# Start/stop/restart unRAID.
-VERSION="2.04"
+#
+# Copyright (C) 2008-2014 by Robert Cotrone <weebotech@cotrone.com> & Dan Landon
+#
+# This file is part of the Powerdown package for unRAID.
+#
+# Powerdown is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Powerdown is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Powerdown.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Stop unRAID.
+#
+VERSION="2.05"
 
 # be sure rc.unRAID is not run twice
 if [ -f /var/run/rc.unRAID.pid ]
@@ -10,12 +29,6 @@ if [ -f /var/run/rc.unRAID.pid ]
 fi
 
 trap "rm -f /var/run/rc.unRAID.pid" EXIT HUP INT QUIT
-
-if [ $1 = "-v" ]
-then
-	echo "Powerdown V$VERSION"
-	exit
-fi
 
 [ ${DEBUG:=0} -gt 0 ] && set -x -v
 
@@ -49,6 +62,11 @@ fi
 # no matter what.  Start from known directory
 cd /
 
+unRAID_version()
+{
+	echo "Powerdown V$VERSION"
+}
+
 logger()
 {
   typeset F=${1##-t*}
@@ -58,10 +76,8 @@ logger()
      else F="-t${P}[$$]"
   fi
 
-  # /usr/bin/logger -is -plocal7.info ${F} $*
   /usr/bin/logger -i -plocal7.info ${F} $*
 }
-
 
 diagnostic_dump()
 {
@@ -113,7 +129,6 @@ diagnostic_dump()
     fi
 
     unRAID_status       | logger -tstatus -s
-
 }
 
 save_syslog()
@@ -132,12 +147,10 @@ save_syslog()
         fi
     done
 
-    # logger "Saving current syslog to ${LOGNAME}"
     echo "Saving current syslog: ${LOGNAME}"
     todos < /var/log/syslog > "${LOGNAME}"
     touch --reference=/var/log/syslog ${LOGNAME}
     chmod a-x ${LOGNAME}
-    ls -l "${LOGNAME}"
 
     # Save latest syslog in a .zip archive for uploading
     # logger "zipping current syslog to ${LOGDIR}/syslog.zip"
@@ -167,7 +180,7 @@ unRAID_pid_check()
     # find active pids on array save to tmp file
     # so size (-s) can be tested and print if > 0
     PSTMP="/tmp/ps.$$"
-	fuser -mv /mnt/disk* /mnt/cache /mnt/user* /dev/md* 2>/dev/null > ${PSTMP}
+	fuser -mv /mnt/disk* /mnt/cache /mnt/user/* /dev/md* 2>/dev/null > ${PSTMP}
 
     if [ -s "${PSTMP}" ]
        then echo -e "Active PIDS on the array"
@@ -176,49 +189,10 @@ unRAID_pid_check()
     rm -f ${PSTMP}
 }
 
-# Start unraid:
-unRAID_start()
-{
-	echo "Not yet implemented!"
-	exit
-
-    logger "Starting Plugins."
-
-    # files only - do not include directories.
-    comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -p "/etc/rc.d" | grep -v "/") | while read line; do logger Running: \"/etc/rc.d/$line start\"; /etc/rc.d/$line start; done
-
-    logger "Processing $RCDIR scripts."
-
-    # run scripts in the /etc/rc.d/rc.unRAID.d directory
-    find ${RCDIR} -type f -name 'S[0-9][0-9]*' | while read script
-    do  if [ -x ${script} ] ; then 
-          logger Running: \"${script} start\"
-           ${script} start
-       fi
-    done
-
-    logger "Starting unRAID."
-
-    if [ -e /proc/mdcmd ]
-       then logger "Starting the Array"
-            echo status > /proc/mdcmd
-            cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.1
-            echo start > /proc/mdcmd 2>/dev/null
-            sleep 3
-            echo status > /proc/mdcmd
-            cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.2
-            diff -u /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2 | logger -t mdstatusdiff
-            rm   -f /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2
-    fi
-
-    [ -x /etc/rc.d/rc.samba ] && /etc/rc.d/rc.samba start
-    [ -x /etc/rc.d/rc.nfsd  ] && /etc/rc.d/rc.nfsd  start
-}
-
 # Stop unraid:
 unRAID_stop()
 {
-	logger "Powerdown $VERSION"
+	logger "Powerdown V$VERSION"
 
     logger "Stopping Plugins."
 
@@ -251,50 +225,43 @@ unRAID_stop()
     do   umount -vf $FS;
     done 2>&1 | logger
 
-	echo "Killing active pids on the array drives"
-	logger "Killing active pids on the array drives"
-    fuser -k /mnt/disk* /mnt/cache /mnt/user* /dev/md* 2>/dev/null | logger
-
-	echo "Unmounting the drives"
-    logger "Umounting the drives"
-    for disk in /mnt/disk*
-    do  /bin/umount -v ${disk}
-    done 2>/dev/null | logger
-
-	echo "Synching data"
-	logger "Synching data"
-    sync
-
-    if [ -e /proc/mdcmd ]
+    if [ -x /root/mdcmd ]
 	then
-		echo "Stopping the Array"
-		logger "Stopping the Array"
-		echo status > /proc/mdcmd
-		cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.1
-		echo stop > /proc/mdcmd 2>/dev/null
-		sleep 5
-		echo status > /proc/mdcmd
-		cat < /proc/mdcmd | tr -d '\000' > /tmp/mdcmd.$$.2
-		diff -u /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2 | logger -t mdstatusdiff
-		rm   -f /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2
+		if [ -n "`/root/mdcmd status | grep "mdState=STARTED"`" ]
+		then
+			echo "Killing active pids on the array drives"
+			logger "Killing active pids on the array drives"
+			fuser -k /mnt/disk* /mnt/cache /mnt/user/* /dev/md* 2>&1 | logger
+
+			echo "Synching data"
+			logger "Synching data"
+			sync
+
+			echo "Unmounting the drives"
+			logger "Umounting the drives"
+			for disk in /dev/md*
+			do  /bin/umount -vf ${disk}
+			done 2>&1 | logger
+
+			echo "Stopping the Array"
+			logger "Stopping the Array"
+			/root/mdcmd status | tr -d '\000' > /tmp/mdcmd.$$.1
+			/root/mdcmd stop 2>&1 | logger
+			sleep 5
+			/root/mdcmd status | tr -d '\000' > /tmp/mdcmd.$$.2
+			diff -u /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2 | logger -t mdstatusdiff
+			rm   -f /tmp/mdcmd.$$.1 /tmp/mdcmd.$$.2
+		else
+			echo "Array Stopped"
+			logger "Array Stopped"
+		fi
+ 	else
+		echo "Cannot run /root/mdcmd"
+		logger "Cannot run /root/mdcmd"
     fi
 
 	echo "Saving syslog"
     save_syslog
-
-    # killall emhttp
-
-}
-
-# Restart unRAID:
-unRAID_restart()
-{
-	echo "Not yet implemented!"
-	exit
-
-    unRAID_stop
-    sleep 1
-    unRAID_start
 }
 
 # process custom scripts in $RCDIR
@@ -401,15 +368,14 @@ unRAID_status()
 }
 
 case "$1" in
-    'start'  ) unRAID_start;;
+    '-v'     ) unRAID_version;;
     'stop'   ) unRAID_stop;;
-    'restart') unRAID_restart;;
     'status' ) unRAID_status;;
     'custom' ) unRAID_custom;;
     'diag'   ) diagnostic_dump;;
 	'syslog' ) save_syslog;;
     'msg'    ) shift; logger $@;;
-    *) echo "usage $0 start|stop|restart|status|diag|syslog|msg";;
+    *) echo "usage $0 -v|stop|status|custom|diag|syslog|msg";;
 esac
 
 trap - EXIT HUP INT QUIT
