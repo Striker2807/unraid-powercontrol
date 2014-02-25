@@ -1,4 +1,7 @@
+powerdown:
 powerdown: powerdown  Control scripts for the unRAID server Environment.
+powerdown:
+powerdown: Copyright (C) 2008-2014 by Robert Cotrone & Dan Landon
 powerdown:
 powerdown: Adds /sbin/powerdown script to assist with quick unRAID poweroff
 powerdown:
@@ -20,3 +23,4 @@ powerdown:
 powerdown: Diagnostic mode for quick syslog dump/save to /boot/logs
 powerdown: call as /etc/rc.d/ec.unRAID diag
 powerdown: call as /etc/rc.d/rc.unRAID syslog 
+powerdown:

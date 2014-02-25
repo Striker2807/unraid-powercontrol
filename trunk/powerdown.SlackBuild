@@ -1,14 +1,33 @@
 #!/bin/sh
+#
+# Copyright (C) 2008-2014 by Robert Cotrone <weebotech@cotrone.com> & Dan Landon
+#
+# This file is part of the Powerdown package for unRAID.
+#
+# Powerdown is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Powerdown is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Powerdown.  If not, see <http://www.gnu.org/licenses/>.
+#
 # based on the Slackware 14.1 SlackBuild
 # Packager Rob Cotrone  ( WeeboTech at mydomain dot com)
 # http://lime-technology.com
 # Required: 
+#
 
 CWD=`pwd`
 TMP=${TMP:-/tmp/tgz}
 PKG=$TMP/powerdown
 NAME=powerdown  
-VERSION=2.04
+VERSION=2.05
 ARCH=${ARCH:-noarch}
 BUILD=unRAID
 SOURCE=http://www.cotrone.com/rob/projects/unraid/$NAME-$VERSION.tar.gz
