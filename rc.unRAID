@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (C) 2008-2014 by Robert Cotrone <weebotech@cotrone.com> & Dan Landon
+# Copyright (C) 2008-2014 by Robert Cotrone & Dan Landon
 #
 # This file is part of the Powerdown package for unRAID.
 #
@@ -19,7 +19,7 @@
 #
 # Stop unRAID.
 #
-VERSION="2.05"
+VERSION="2.06"
 
 # be sure rc.unRAID is not run twice
 if [ -f /var/run/rc.unRAID.pid ]
@@ -70,7 +70,6 @@ unRAID_version()
 logger()
 {
   typeset F=${1##-t*}
-
   if [ "${F}" != "${1}" ]
      then F=""
      else F="-t${P}[$$]"
@@ -189,6 +188,20 @@ unRAID_pid_check()
     rm -f ${PSTMP}
 }
 
+# Start unraid:
+unRAID_start()
+{
+    logger "Processing $RCDIR start scripts."
+
+    # run start scripts in the /etc/rc.d/rc.unRAID.d directory
+    find ${RCDIR} -type f -name 'S[0-9][0-9]*' | sort | while read script
+    do  if [ -x ${script} ] ; then
+          logger Running: \"${script} start\"
+           ${script} start | logger
+       fi
+    done
+}
+
 # Stop unraid:
 unRAID_stop()
 {
@@ -207,7 +220,7 @@ unRAID_stop()
     comm -13 <(sort -u < "/etc/rc.d/rcdstock") <(ls -p "/etc/rc.d" | grep -v "/") |	while read LINE
     do  [ -z "${LINE}" ] && continue
 		# only if executable, not .bak, and not .swp
-		if [ -x "/etc/rc.d/${LINE}" ] && ! [[ "${LINE}" =~ ".bak" ]] && ! [[ "${LINE}" =~ ".swp." ]]
+		if [ -x "/etc/rc.d/${LINE}" ] && ! [[ "${LINE}" =~ ".bak" ]] && ! [[ "${LINE}" =~ ".swp" ]]
 		then
 			logger Running: \"/etc/rc.d/${LINE} stop\"
 			/etc/rc.d/${LINE} stop
@@ -264,16 +277,16 @@ unRAID_stop()
     save_syslog
 }
 
-# process custom scripts in $RCDIR
-unRAID_custom()
+# process custom kill scripts in $RCDIR
+unRAID_kill()
 {
-    logger "Processing $RCDIR scripts."
+    logger "Processing $RCDIR kill scripts."
 
-    # run scripts in the /etc/rc.d/rc.unRAID.d directory
+    # run kill scripts in the /etc/rc.d/rc.unRAID.d directory
     find ${RCDIR} -type f -name 'K[0-9][0-9]*' | sort | while read script
     do  if [ -x ${script} ] ; then
            logger Running: \"${script} stop\"
-           ${script} stop
+           ${script} stop | logger
         fi
     done
 }
@@ -368,14 +381,15 @@ unRAID_status()
 }
 
 case "$1" in
-    '-v'     ) unRAID_version;;
-    'stop'   ) unRAID_stop;;
-    'status' ) unRAID_status;;
-    'custom' ) unRAID_custom;;
-    'diag'   ) diagnostic_dump;;
-	'syslog' ) save_syslog;;
-    'msg'    ) shift; logger $@;;
-    *) echo "usage $0 -v|stop|status|custom|diag|syslog|msg";;
+    'version' ) unRAID_version;;
+    'start'   ) unRAID_start;;
+    'stop'    ) unRAID_stop;;
+    'status'  ) unRAID_status;;
+    'kill'    ) unRAID_kill;;
+    'diag'    ) diagnostic_dump;;
+	'syslog'  ) save_syslog;;
+    'msg'     ) shift; logger $@;;
+    *) echo "usage $0 version|start|stop|status|kill|diag|syslog|msg";;
 esac
 
 trap - EXIT HUP INT QUIT
