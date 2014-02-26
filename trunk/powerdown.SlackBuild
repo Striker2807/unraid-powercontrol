@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (C) 2008-2014 by Robert Cotrone <weebotech@cotrone.com> & Dan Landon
+# Copyright (C) 2008-2014 by Robert Cotrone & Dan Landon
 #
 # This file is part of the Powerdown package for unRAID.
 #
@@ -27,7 +27,7 @@ CWD=`pwd`
 TMP=${TMP:-/tmp/tgz}
 PKG=$TMP/powerdown
 NAME=powerdown  
-VERSION=2.05
+VERSION=2.06
 ARCH=${ARCH:-noarch}
 BUILD=unRAID
 SOURCE=http://www.cotrone.com/rob/projects/unraid/$NAME-$VERSION.tar.gz

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (C) 2008-2014 by Robert Cotrone <weebotech@cotrone.com> & Dan Landon
+# Copyright (C) 2008-2014 by Robert Cotrone & Dan Landon
 #
 # This file is part of the Powerdown package for unRAID.
 #
@@ -31,8 +31,8 @@ logger "Powerdown initiated"
 echo "Powerdown initiated"
 
 # display version
-/etc/rc.d/rc.unRAID -v
-/etc/rc.d/rc.unRAID -v | logger
+/etc/rc.d/rc.unRAID version
+/etc/rc.d/rc.unRAID version | logger
 
 if [ -f /var/run/powerdown.pid ]
    then logger "Powerdown already active, this one is exiting"
@@ -42,12 +42,10 @@ fi
 
 trap "rm -f /var/run/powerdown.pid" EXIT HUP INT QUIT
 
-# process custom scripts before shutting down
+# process custom kill scripts before shutting down
 if [ -f /etc/rc.d/rc.unRAID ]
 then
-	logger "Processing custom scripts"
-	echo "Processing custom scripts"
-	/etc/rc.d/rc.unRAID custom
+	/etc/rc.d/rc.unRAID kill
 fi
 
 # Initiate shutdown
