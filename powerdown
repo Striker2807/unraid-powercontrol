@@ -43,7 +43,7 @@ fi
 trap "rm -f /var/run/powerdown.pid" EXIT HUP INT QUIT
 
 # process custom kill scripts before shutting down
-if [ -f /etc/rc.d/rc.unRAID ]
+if [ -x /etc/rc.d/rc.unRAID ]
 then
 	/etc/rc.d/rc.unRAID kill
 fi
