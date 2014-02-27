@@ -37,20 +37,16 @@ config() {
 #do # config etc/$i; 
 #done
 
-POWERDOWNHOME=/boot/config/plugins/powerdown
+POWERDOWNHOME=/boot/config/plugins/powerdown/rc.unRAID.d/
 SD_RCFILE=/etc/rc.d/rc.local_shutdown
 RCFILE=/etc/rc.d/rc.unRAID
 CUST_RCDIR=/etc/rc.d/rc.unRAID.d/
-PLUGIN_DIR=/usr/local/emhttp/plugins
+PLUGIN_DIR=/usr/local/emhttp/plugins/powerdown/event
 
-if [ ! -d "${POWERDOWNHOME}/" ]
-then
-	mkdir ${POWERDOWNHOME}/
-	mkdir ${POWERDOWNHOME}/custom/
-fi
+[ ! -d "${POWERDOWNHOME}" ] && mkdir -p ${POWERDOWNHOME}
 
-# copy the K scripts from thr flash
-find ${RCDIR} -type f -name 'K[0-9][0-9]*' | sort | while read script
+# copy the K scripts from the flash
+find ${POWERDOWNHOME} -type f -name 'K[0-9][0-9]*' | sort | while read script
 do  if [ -x ${script} ] ; then
        fromdos < ${script} > ${CUST_RCDIR}${script##*/}
        chmod +x ${CUST_RCDIR}${script##*/}
@@ -58,22 +54,18 @@ do  if [ -x ${script} ] ; then
 done
 
 # copy the S scripts from the flash
-find ${RCDIR} -type f -name 'S[0-9][0-9]*' | sort | while read script
+find ${POWERDOWNHOME} -type f -name 'S[0-9][0-9]*' | sort | while read script
 do  if [ -x ${script} ] ; then
        fromdos < ${script} > ${CUST_RCDIR}${script##*/}
        chmod +x ${CUST_RCDIR}${script##*/}
     fi
 done
 
-#cp ${POWERDOWNHOME}/custom/K* ${CUST_RCDIR} 2>/dev/null
-#cp ${POWERDOWNHOME}/custom/S* ${CUST_RCDIR} 2>/dev/null
-
-mkdir ${PLUGIN_DIR}/powerdown/
-mkdir ${PLUGIN_DIR}/powerdown/event/
-echo "/etc/rc.d/rc.unRAID start" > ${PLUGIN_DIR}/powerdown/event/started
-chmod 0770 ${PLUGIN_DIR}/powerdown/event/started
-echo "/etc/rc.d/rc.unRAID kill" > ${PLUGIN_DIR}/powerdown/event/unmounting_disks
-chmod 0770 ${PLUGIN_DIR}/powerdown/event/unmounting_disks
+mkdir -p ${PLUGIN_DIR}
+echo "/etc/rc.d/rc.unRAID start" > ${PLUGIN_DIR}/started
+chmod 0770 ${PLUGIN_DIR}/started
+echo "/etc/rc.d/rc.unRAID kill" > ${PLUGIN_DIR}/unmounting_disks
+chmod 0770 ${PLUGIN_DIR}/unmounting_disks
 
 if ! grep ${RCFILE} ${SD_RCFILE} >/dev/null 2>&1
    then echo -e "\n\n[ -x ${RCFILE} ] && ${RCFILE} stop\n" >> ${SD_RCFILE}

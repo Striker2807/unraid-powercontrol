@@ -179,7 +179,7 @@ unRAID_pid_check()
     # find active pids on array save to tmp file
     # so size (-s) can be tested and print if > 0
     PSTMP="/tmp/ps.$$"
-	fuser -mv /mnt/disk* /mnt/cache /mnt/user/* /dev/md* 2>/dev/null > ${PSTMP}
+	/usr/bin/fuser -mv /mnt/disk* /mnt/cache /mnt/user/* /dev/md* 2>/dev/null > ${PSTMP}
 
     if [ -s "${PSTMP}" ]
        then echo -e "Active PIDS on the array"
@@ -197,7 +197,7 @@ unRAID_start()
     find ${RCDIR} -type f -name 'S[0-9][0-9]*' | sort | while read script
     do  if [ -x ${script} ] ; then
           logger Running: \"${script} start\"
-           ${script} start | logger
+           ${script} start 2>&1 | logger
        fi
     done
 }
@@ -244,7 +244,7 @@ unRAID_stop()
 		then
 			echo "Killing active pids on the array drives"
 			logger "Killing active pids on the array drives"
-			fuser -k /mnt/disk* /mnt/cache /mnt/user/* /dev/md* 2>&1 | logger
+			/usr/bin/fuser -k /mnt/user/* /mnt/disk* /mnt/cache /dev/md* 2>&1 | logger
 
 			echo "Synching data"
 			logger "Synching data"
@@ -255,6 +255,9 @@ unRAID_stop()
 			for disk in /dev/md*
 			do  /bin/umount -vf ${disk}
 			done 2>&1 | logger
+
+			logger "Active pids left on the array drives"
+			/usr/bin/fuser -mv /dev/md* 2>&1 | logger
 
 			echo "Stopping the Array"
 			logger "Stopping the Array"
@@ -286,7 +289,7 @@ unRAID_kill()
     find ${RCDIR} -type f -name 'K[0-9][0-9]*' | sort | while read script
     do  if [ -x ${script} ] ; then
            logger Running: \"${script} stop\"
-           ${script} stop | logger
+           ${script} stop 2>&1 | logger
         fi
     done
 }
