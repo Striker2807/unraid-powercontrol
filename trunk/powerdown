@@ -18,7 +18,8 @@
 # along with Powerdown.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-alias logger="/usr/bin/logger -is -plocal7.info -tpowerdown" 
+shopt -s expand_aliases
+alias logger="/usr/bin/logger -i -plocal7.info -tpowerdown" 
 
 [ ${DEBUG:=0} -gt 0 ] && set -x -v
 
@@ -49,7 +50,7 @@ then
 fi
 
 # Initiate shutdown
-logger "Initiating Shutdown with ${1}"
+logger "Initiating Shutdown with '${1}'"
 /sbin/shutdown -t5 ${OPT} now
 
 trap - EXIT HUP INT QUIT

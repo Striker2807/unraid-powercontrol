@@ -46,8 +46,12 @@ LOGSAVE="10"
 [ ! -d ${LOGDIR} ] && mkdir -p ${LOGDIR}
 
 PATH=$PATH:/sbin:/usr/sbin:/boot/custom/bin
-# directory for extra script processing
-RCDIR=/etc/rc.d/rc.unRAID.d
+
+# directory for K and S script processing
+RC_DIR=/etc/rc.d/rc.unRAID.d/
+
+# directory to flash drive cached K and S scripts
+POWERDOWNHOME=/boot/config/plugins/powerdown/rc.unRAID.d/
 
 # Alter this to NO or anything other then YES
 # To disable calls to these diagnostics
@@ -191,13 +195,13 @@ unRAID_pid_check()
 # Start unraid:
 unRAID_start()
 {
-    logger "Processing $RCDIR start scripts."
+    logger "Processing $RC_DIR start scripts."
 
     # run start scripts in the /etc/rc.d/rc.unRAID.d directory
-    find ${RCDIR} -type f -name 'S[0-9][0-9]*' | sort | while read script
+    find ${RC_DIR} -type f -name 'S[0-9][0-9]*' | sort | while read script
     do  if [ -x ${script} ] ; then
-          logger Running: \"${script} start\"
-           ${script} start 2>&1 | logger
+           logger Running: \"${script}\"
+           ${script} 2>&1 | logger
        fi
     done
 }
@@ -246,8 +250,8 @@ unRAID_stop()
 			logger "Killing active pids on the array drives"
 			/usr/bin/fuser -k /mnt/user/* /mnt/disk* /mnt/cache /dev/md* 2>&1 | logger
 
-			echo "Synching data"
-			logger "Synching data"
+			echo "Sync filesystems"
+			logger "Sync filesystems"
 			sync
 
 			echo "Unmounting the drives"
@@ -256,8 +260,13 @@ unRAID_stop()
 			do  /bin/umount -vf ${disk}
 			done 2>&1 | logger
 
-			logger "Active pids left on the array drives"
-			/usr/bin/fuser -mv /dev/md* 2>&1 | logger
+		    PSTMP="/tmp/ps.$$"
+			/usr/bin/fuser -mv /dev/md* 2>&1 > ${PSTMP}
+		    if [ -s "${PSTMP}" ]
+			then
+				logger "Active pids left on the array drives"
+				/usr/bin/fuser -mv /dev/md* 2>&1 | logger
+			fi
 
 			echo "Stopping the Array"
 			logger "Stopping the Array"
@@ -280,18 +289,49 @@ unRAID_stop()
     save_syslog
 }
 
-# process custom kill scripts in $RCDIR
+# process custom kill scripts in $RC_DIR
 unRAID_kill()
 {
-    logger "Processing $RCDIR kill scripts."
+    logger "Processing $RC_DIR kill scripts."
 
     # run kill scripts in the /etc/rc.d/rc.unRAID.d directory
-    find ${RCDIR} -type f -name 'K[0-9][0-9]*' | sort | while read script
+    find ${RC_DIR} -type f -name 'K[0-9][0-9]*' | sort | while read script
     do  if [ -x ${script} ] ; then
-           logger Running: \"${script} stop\"
-           ${script} stop 2>&1 | logger
+           logger Running: \"${script}\"
+           ${script} 2>&1 | logger
         fi
     done
+}
+
+# update rc.unRAID.rc scripts
+unRAID_update()
+{
+	echo "Updating $RC_DIR scripts from flash drive"
+
+	# remove all the files before we update
+	rm ${RC_DIR}* 2>/dev/null
+
+	# copy the K scripts from the flash
+	find ${POWERDOWNHOME} -type f -name 'K[0-9][0-9]*' | sort | while read script
+	do  if [ -x ${script} ] ; then
+		   fromdos < ${script} > ${RC_DIR}${script##*/}
+		   chmod +x ${RC_DIR}${script##*/}
+		fi
+	done
+
+	# copy the S scripts from the flash
+	find ${POWERDOWNHOME} -type f -name 'S[0-9][0-9]*' | sort | while read script
+	do  if [ -x ${script} ] ; then
+		   fromdos < ${script} > ${RC_DIR}${script##*/}
+		   chmod +x ${RC_DIR}${script##*/}
+		fi
+	done
+	# remove any *.bak files
+	rm ${RC_DIR}*.bak 2>/dev/null
+	rm ${RC_DIR}*.BAK 2>/dev/null
+
+	echo "Uptated files:"
+	ls ${RC_DIR}
 }
 
 load_mdstatus()
@@ -391,8 +431,9 @@ case "$1" in
     'kill'    ) unRAID_kill;;
     'diag'    ) diagnostic_dump;;
 	'syslog'  ) save_syslog;;
+    'update'  ) unRAID_update;;
     'msg'     ) shift; logger $@;;
-    *) echo "usage $0 version|start|stop|status|kill|diag|syslog|msg";;
+    *) echo "usage $0 version|start|stop|status|kill|diag|syslog|update|msg";;
 esac
 
 trap - EXIT HUP INT QUIT

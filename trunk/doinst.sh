@@ -40,7 +40,7 @@ config() {
 POWERDOWNHOME=/boot/config/plugins/powerdown/rc.unRAID.d/
 SD_RCFILE=/etc/rc.d/rc.local_shutdown
 RCFILE=/etc/rc.d/rc.unRAID
-CUST_RCDIR=/etc/rc.d/rc.unRAID.d/
+RC_DIR=/etc/rc.d/rc.unRAID.d/
 PLUGIN_DIR=/usr/local/emhttp/plugins/powerdown/event
 
 [ ! -d "${POWERDOWNHOME}" ] && mkdir -p ${POWERDOWNHOME}
@@ -48,18 +48,22 @@ PLUGIN_DIR=/usr/local/emhttp/plugins/powerdown/event
 # copy the K scripts from the flash
 find ${POWERDOWNHOME} -type f -name 'K[0-9][0-9]*' | sort | while read script
 do  if [ -x ${script} ] ; then
-       fromdos < ${script} > ${CUST_RCDIR}${script##*/}
-       chmod +x ${CUST_RCDIR}${script##*/}
+       fromdos < ${script} > ${RC_DIR}${script##*/}
+       chmod +x ${RC_DIR}${script##*/}
     fi
 done
 
 # copy the S scripts from the flash
 find ${POWERDOWNHOME} -type f -name 'S[0-9][0-9]*' | sort | while read script
 do  if [ -x ${script} ] ; then
-       fromdos < ${script} > ${CUST_RCDIR}${script##*/}
-       chmod +x ${CUST_RCDIR}${script##*/}
+       fromdos < ${script} > ${RC_DIR}${script##*/}
+       chmod +x ${RC_DIR}${script##*/}
     fi
 done
+
+# remove any *.bak files
+rm ${RC_DIR}*.bak 2>/dev/null
+rm ${RC_DIR}*.BAK 2>/dev/null
 
 mkdir -p ${PLUGIN_DIR}
 echo "/etc/rc.d/rc.unRAID start" > ${PLUGIN_DIR}/started
