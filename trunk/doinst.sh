@@ -62,8 +62,7 @@ do  if [ -x ${script} ] ; then
 done
 
 # remove any *.bak files
-find ${RC_DIR}*.bak -type f -delete 2>/dev/null
-find ${RC_DIR}*.BAK -type f -delete 2>/dev/null
+find ${RC_DIR} \( -name '*.bak' -o -name '*.BAK' \) -delete
 
 mkdir -p ${PLUGIN_DIR}
 echo "/etc/rc.d/rc.unRAID start" > ${PLUGIN_DIR}/started

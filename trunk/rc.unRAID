@@ -327,8 +327,7 @@ unRAID_update()
 		fi
 	done
 	# remove any *.bak files
-	find ${RC_DIR}*.bak -type f -delete 2>/dev/null
-	find ${RC_DIR}*.BAK -type f -delete 2>/dev/null
+	find ${RC_DIR} \( -name '*.bak' -o -name '*.BAK' \) -delete
 
 	echo "Updated files:"
 	ls ${RC_DIR}
