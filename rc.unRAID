@@ -308,8 +308,8 @@ unRAID_update()
 {
 	echo "Updating $RC_DIR scripts from flash drive"
 
-	# remove all the files before we update
-	rm ${RC_DIR}* 2>/dev/null
+	# remove the 'K' and 'S' files before we update
+	find ${RC_DIR} \( -name 'K*' -o -name 'S*' \) -delete
 
 	# copy the K scripts from the flash
 	find ${POWERDOWNHOME} -type f -name 'K[0-9][0-9]*' | sort | while read script
