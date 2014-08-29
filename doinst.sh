@@ -41,7 +41,6 @@ POWERDOWNHOME=/boot/config/plugins/powerdown/rc.unRAID.d/
 SD_RCFILE=/etc/rc.d/rc.local_shutdown
 RCFILE=/etc/rc.d/rc.unRAID
 RC_DIR=/etc/rc.d/rc.unRAID.d/
-PLUGIN_DIR=/usr/local/emhttp/plugins/powerdown/event
 
 [ ! -d "${POWERDOWNHOME}" ] && mkdir -p ${POWERDOWNHOME}
 
@@ -63,12 +62,6 @@ done
 
 # remove any *.bak files
 find ${RC_DIR} \( -name '*.bak' -o -name '*.BAK' \) -delete
-
-mkdir -p ${PLUGIN_DIR}
-echo "/etc/rc.d/rc.unRAID start" > ${PLUGIN_DIR}/started
-chmod 0770 ${PLUGIN_DIR}/started
-echo "/etc/rc.d/rc.unRAID kill" > ${PLUGIN_DIR}/unmounting_disks
-chmod 0770 ${PLUGIN_DIR}/unmounting_disks
 
 if ! grep ${RCFILE} ${SD_RCFILE} >/dev/null 2>&1
    then echo -e "\n\n[ -x ${RCFILE} ] && ${RCFILE} stop\n" >> ${SD_RCFILE}
