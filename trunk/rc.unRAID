@@ -19,7 +19,7 @@
 #
 # Stop unRAID.
 #
-VERSION="2.06"
+VERSION="2.07"
 
 # be sure rc.unRAID is not run twice
 if [ -f /var/run/rc.unRAID.pid ]
@@ -36,14 +36,23 @@ P=${0##*/}              # basename of program
 R=${0%%$P}              # dirname of program
 
 # Set Your LOG directory here
-LOGDIR=/boot/logs
+LOGDIR=/boot/logs/
 
 # Set amount of syslogs you want to keep.
 # Number of syslogs to save in logdir
 LOGSAVE="10"
 
+# read in the configuration file if there is one for LOGDIR and LOGSAVE
+if [ -f /boot/config/plugins/powerdown/powerdown.conf ]
+then
+   fromdos < /boot/config/plugins/powerdown/powerdown.conf > /tmp/powerdown.conf
+   chmod u+x /tmp/powerdown.conf
+   source /tmp/powerdown.conf
+   rm -f /tmp/powerdown.conf
+fi
+
 # If the LOG directory does not exist, make it!
-[ ! -d ${LOGDIR} ] && mkdir -p ${LOGDIR}
+[ ${LOGSAVE} -ne "0" ] && [ ! -d ${LOGDIR} ] && mkdir -p ${LOGDIR}
 
 PATH=$PATH:/sbin:/usr/sbin:/boot/custom/bin
 
@@ -136,45 +145,52 @@ diagnostic_dump()
 
 save_syslog()
 {
-    TS="%Y%m%d-%H%M%S"
-    LOGDATE=`ls -l --time-style="+${TS}" /var/log/syslog | cut -d' ' -f6`
-    LOGNAME="${LOGDIR}/syslog-${LOGDATE}.txt"
+	if [ ${LOGSAVE} -ne "0" ]
+	then
+		TS="%Y%m%d-%H%M%S"
+		LOGDATE=`ls -l --time-style="+${TS}" /var/log/syslog | cut -d' ' -f6`
+		LOGNAME="${LOGDIR}syslog-${LOGDATE}.txt"
 
-    # Save only the $LOGSAVE number of current files
-    i=0
-    ls -1t ${LOGDIR}/syslog*.txt | while read SYSLOG
-    do  ((i++))
-        if [ $i -gt ${LOGSAVE} ]
-           then echo "Removing old syslog: ${SYSLOG}"
-                rm -f ${SYSLOG}
-        fi
-    done
+		# Save only the $LOGSAVE number of current files
+		# save all logs if -1
+		if [ ${LOGSAVE} -ne "-1" ]
+		then
+			i=0
+			ls -1t ${LOGDIR}syslog*.txt | while read SYSLOG
+			do  ((i++))
+				if [ $i -gt ${LOGSAVE} ]
+				   then echo "Removing old syslog: ${SYSLOG}"
+						rm -f ${SYSLOG}
+				fi
+			done
+		fi
 
-    echo "Saving current syslog: ${LOGNAME}"
-    todos < /var/log/syslog > "${LOGNAME}"
-    touch --reference=/var/log/syslog ${LOGNAME}
-    chmod a-x ${LOGNAME}
+		echo "Saving current syslog: ${LOGNAME}"
+		todos < /var/log/syslog > "${LOGNAME}"
+		touch --reference=/var/log/syslog ${LOGNAME}
+		chmod a-x ${LOGNAME}
 
-    # Save latest syslog in a .zip archive for uploading
-    # logger "zipping current syslog to ${LOGDIR}/syslog.zip"
-    # only zip a new syslog.txt if syslog newer then current .zip
+		# Save latest syslog in a .zip archive for uploading
+		# logger "zipping current syslog to ${LOGDIR}syslog.zip"
+		# only zip a new syslog.txt if syslog newer then current .zip
 
-    if [ ! -x /usr/bin/zip ]
-       then echo "zip not installed. Consider installing to automatically zip current syslog"
-            return
-    fi
+		if [ ! -x /usr/bin/zip ]
+		   then echo "zip not installed. Consider installing to automatically zip current syslog"
+				return
+		fi
 
-    if [ /var/log/syslog -nt ${LOGDIR}/syslog.zip ]
-       then cd /var/log
-            # make a symlink to syslog.txt for windows viewing
-            ln -s  syslog syslog.txt
-            rm -f  ${LOGDIR}/syslog.zip
-            # -o (set .zip time to mtime of syslog)
-            # -l (convert lf to crlf on the fly!)
-            zip -o -l ${LOGDIR}/syslog.zip syslog.txt
-            rm -f  syslog.txt  # remove symlink
-            chmod a-x ${LOGDIR}/syslog.zip # remove samba attributes
-    fi
+		if [ /var/log/syslog -nt ${LOGDIR}syslog.zip ]
+		   then cd /var/log
+				# make a symlink to syslog.txt for windows viewing
+				ln -s  syslog syslog.txt
+				rm -f  ${LOGDIR}syslog.zip
+				# -o (set .zip time to mtime of syslog)
+				# -l (convert lf to crlf on the fly!)
+				zip -o -l ${LOGDIR}syslog.zip syslog.txt
+				rm -f  syslog.txt  # remove symlink
+				chmod a-x ${LOGDIR}syslog.zip # remove samba attributes
+		fi
+	fi
 }
 
 # check for any active pids on the array
@@ -227,7 +243,7 @@ unRAID_stop()
 		if [ -x "/etc/rc.d/${LINE}" ] && ! [[ "${LINE}" =~ ".bak" ]] && ! [[ "${LINE}" =~ ".swp" ]]
 		then
 			logger Running: \"/etc/rc.d/${LINE} stop\"
-			/etc/rc.d/${LINE} stop
+			/etc/rc.d/${LINE} stop | logger
 		fi
 	done
 
@@ -287,9 +303,13 @@ unRAID_stop()
 
 	echo "Saving syslog"
     save_syslog
+
+	# Be sure the flash drive completes its writes
+	sync
+	sleep 2
 }
 
-# process custom kill scripts in $RC_DIR
+# process user kill scripts in $RC_DIR
 unRAID_kill()
 {
     logger "Processing $RC_DIR kill scripts."
