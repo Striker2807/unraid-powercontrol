@@ -19,7 +19,7 @@
 #
 # Stop unRAID.
 #
-VERSION="2.07"
+VERSION="2.08"
 
 # be sure rc.unRAID is not run twice
 if [ -f /var/run/rc.unRAID.pid ]
