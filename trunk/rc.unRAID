@@ -19,7 +19,7 @@
 #
 # Stop unRAID.
 #
-VERSION="2.08"
+VERSION="2.10"
 
 # be sure rc.unRAID is not run twice
 if [ -f /var/run/rc.unRAID.pid ]
@@ -249,8 +249,10 @@ unRAID_stop()
 
     logger "Stopping unRAID."
 
-    [ -x /etc/rc.d/rc.samba ] && /etc/rc.d/rc.samba stop
-    [ -x /etc/rc.d/rc.nfsd  ] && /etc/rc.d/rc.nfsd  stop
+    [ -x /etc/rc.d/rc.docker ] && /etc/rc.d/rc.docker stop
+    [ -x /etc/rc.d/rc.samba  ] && /etc/rc.d/rc.samba  stop
+    [ -x /etc/rc.d/rc.nfsd   ] && /etc/rc.d/rc.nfsd   stop
+    [ -x /etc/rc.d/rc.atalk  ] && /etc/rc.d/rc.atalk  stop
 
     swapoff -av 2>&1  | logger
 

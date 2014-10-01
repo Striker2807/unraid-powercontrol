@@ -134,6 +134,7 @@ fi
 
 # set the default power button press to /sbin/powerdown and
 # be sure the correct powerdown script is used
+# Save the unraid powerdown script.
 [ -f /usr/local/sbin/powerdown ] && mv /usr/local/sbin/powerdown /usr/local/sbin/unraid_powerdown
 cp /sbin/powerdown /usr/local/sbin/powerdown 2>/dev/null
 sed -i -e "s/event=.*/event=button power.*/" /etc/acpi/events/default
